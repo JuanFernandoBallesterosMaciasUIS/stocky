@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 import '../res/data/colors.dart';
 import '../res/data/constants.dart';
 import '../res/data/dimens.dart';
+import 'compras_screen.dart';
+import 'gastos_screen.dart';
+import 'ingresos_screen.dart';
 import 'inventory_screen.dart';
+import 'reportes_screen.dart';
 
 /// Scaffold principal de la aplicación con navegación inferior.
 /// Cada ítem del nav renderiza su pantalla correspondiente en un [IndexedStack]
@@ -39,9 +43,7 @@ class _MainScaffoldState extends State<MainScaffold> {
           ),
         ),
       ),
-      floatingActionButton: _currentIndex == _NavItem.inventarioIndex
-          ? _InventoryFab()
-          : null,
+      floatingActionButton: null,
       bottomNavigationBar: _BottomNav(
         currentIndex: _currentIndex,
         onTap: _onNavItemTapped,
@@ -53,11 +55,11 @@ class _MainScaffoldState extends State<MainScaffold> {
   /// Cada pantalla se mantiene viva durante el ciclo de vida del scaffold.
   List<Widget> _buildScreens() {
     return const [
-      _PlaceholderScreen(label: AppConstants.navIngresos),
-      _PlaceholderScreen(label: AppConstants.navCompras),
-      _PlaceholderScreen(label: AppConstants.navGastos),
+      IngresosScreen(),
+      ComprasScreen(),
+      GastosScreen(),
       InventoryScreen(),
-      _PlaceholderScreen(label: AppConstants.navReportes),
+      ReportesScreen(),
     ];
   }
 }
@@ -65,29 +67,6 @@ class _MainScaffoldState extends State<MainScaffold> {
 // ─────────────────────────────────────────────
 // Widgets privados del MainScaffold
 // ─────────────────────────────────────────────
-
-/// FAB de la pantalla de inventario.
-class _InventoryFab extends StatelessWidget {
-  const _InventoryFab();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: Dimens.fabSize,
-      height: Dimens.fabSize,
-      child: FloatingActionButton(
-        onPressed: () {
-          // TODO: abrir modal de creación de producto
-        },
-        backgroundColor: ColorApp.primary,
-        foregroundColor: ColorApp.slate900,
-        elevation: 4,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add, size: 30),
-      ),
-    );
-  }
-}
 
 /// Barra de navegación inferior con los cinco ítems del diseño.
 class _BottomNav extends StatelessWidget {
@@ -177,23 +156,6 @@ class _NavButton extends StatelessWidget {
           ),
           const SizedBox(height: Dimens.paddingSm),
         ],
-      ),
-    );
-  }
-}
-
-/// Pantalla genérica de marcador de posición para tabs no implementadas.
-class _PlaceholderScreen extends StatelessWidget {
-  final String label;
-
-  const _PlaceholderScreen({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        '$label – próximamente',
-        style: const TextStyle(fontSize: 16, color: ColorApp.slate500),
       ),
     );
   }

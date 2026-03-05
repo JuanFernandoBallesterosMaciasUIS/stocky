@@ -35,5 +35,20 @@ abstract final class Dimens {
 
   // Bordes
   static const double borderWidth = 1.0;
+  static const double borderWidthFocus = 2.0;
   static const double tabIndicatorWidth = 3.0;
+
+  // Border radius extra grande (rounded-xl ≈ 12 px)
+  static const double radiusXl = 12.0;
+
+  // Tipografía
+  static const double fontSizeTitle = 28.0;
+  static const double fontSizeXs = 11.0;
+
+  // Botón principal
+  static const double primaryBtnHeight = 52.0;
+  static const double btnElevation = 6.0;
+
+  // Toolbar con gradiente
+  static const double appBarHeightGradient = 72.0;
 }

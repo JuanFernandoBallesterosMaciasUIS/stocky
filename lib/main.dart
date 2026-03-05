@@ -2,6 +2,8 @@
 import 'res/data/colors.dart';
 import 'res/data/constants.dart';
 import 'screens/main_scaffold.dart';
+import 'store/app_store.dart';
+import 'store/store_provider.dart';
 
 void main() {
   runApp(const StockyApp());
@@ -21,7 +23,7 @@ class StockyApp extends StatelessWidget {
         scaffoldBackgroundColor: ColorApp.backgroundLight,
         splashFactory: InkRipple.splashFactory,
       ),
-      home: const MainScaffold(),
+      home: StoreProvider(store: AppStore(), child: const MainScaffold()),
     );
   }
 }
