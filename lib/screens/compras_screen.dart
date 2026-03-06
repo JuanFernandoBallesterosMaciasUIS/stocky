@@ -433,40 +433,37 @@ class _SupplierForm extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: ColorApp.cardBg,
+      color: ColorApp.surface,
       padding: const EdgeInsets.all(Dimens.paddingLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TextField(
             controller: supplierController,
-            decoration: const InputDecoration(
-              labelText: AppConstants.hintSupplierName,
-              border: OutlineInputBorder(),
-              isDense: true,
+            decoration: moduleRoundedInputDecoration(
+              label: AppConstants.hintSupplierName,
+              focusColor: ColorApp.moduleCompras,
             ),
           ),
-          const SizedBox(height: Dimens.paddingSm),
+          const SizedBox(height: Dimens.paddingMd),
           Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: amountController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: AppConstants.hintAmount,
-                    border: OutlineInputBorder(),
-                    isDense: true,
+                  decoration: moduleRoundedInputDecoration(
+                    label: AppConstants.hintAmount,
+                    focusColor: ColorApp.moduleCompras,
                   ),
                 ),
               ),
-              const SizedBox(width: Dimens.paddingSm),
+              const SizedBox(width: Dimens.paddingMd),
               Expanded(
                 child: DropdownButtonFormField<PaymentMethod>(
                   initialValue: selectedPayment,
-                  decoration: const InputDecoration(
-                    border: OutlineInputBorder(),
-                    isDense: true,
+                  decoration: moduleRoundedInputDecoration(
+                    focusColor: ColorApp.moduleCompras,
                   ),
                   items: [
                     for (final m in PaymentMethod.values)
@@ -484,14 +481,12 @@ class _SupplierForm extends StatelessWidget {
             const SizedBox(height: Dimens.paddingXs),
             Text(error, style: const TextStyle(color: ColorApp.stockLowText)),
           ],
-          const SizedBox(height: Dimens.paddingSm),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: ColorApp.moduleCompras,
-              foregroundColor: ColorApp.surface,
-            ),
+          const SizedBox(height: Dimens.paddingMd),
+          ModulePrimaryButton(
+            label: AppConstants.btnRegister,
             onPressed: onSubmit,
-            child: const Text(AppConstants.btnRegister),
+            color: ColorApp.moduleCompras,
+            shadowColor: ColorApp.moduleComprasShadow,
           ),
         ],
       ),
