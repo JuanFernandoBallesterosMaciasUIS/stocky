@@ -73,7 +73,7 @@ abstract final class AppConstants {
   static const String appName = 'Stocky';
 
   /// Título de la pantalla de inventario.
-  static const String inventoryTitle = 'CONTROL DE INVENTARIOS';
+  static const String inventoryTitle = 'Inventario';
 
   // Etiquetas de tabs de inventario
   static const String tabManualEntry = 'Registro Manual';

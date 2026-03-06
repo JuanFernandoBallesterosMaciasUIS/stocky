@@ -19,7 +19,7 @@ abstract final class Dimens {
 
   // Alturas fijas
   static const double productItemMinHeight = 72.0;
-  static const double bottomNavHeight = 64.0;
+  static const double bottomNavHeight = 72.0;
   static const double headerHeight = 52.0;
   static const double tabBarHeight = 48.0;
 
@@ -51,4 +51,9 @@ abstract final class Dimens {
 
   // Toolbar con gradiente
   static const double appBarHeightGradient = 72.0;
+
+  // Barra de navegación inferior moderna
+  static const double radiusNavTop = 20.0;
+  static const double navPillHeight = 3.0;
+  static const double navPillWidth = 24.0;
 }
