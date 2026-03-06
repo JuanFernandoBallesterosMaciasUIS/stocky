@@ -63,10 +63,7 @@ class ModulePrimaryButton extends StatelessWidget {
           ),
         ),
         onPressed: onPressed,
-        child: Text(
-          label,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
+        child: Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
       ),
     );
   }
@@ -159,6 +156,77 @@ class ModuleListItem extends StatelessWidget {
         border: Border(bottom: BorderSide(color: ColorApp.borderLight)),
       ),
       child: child,
+    );
+  }
+}
+
+/// Badge informativo que muestra el stock disponible de un producto seleccionado.
+/// El color cambia según el nivel:
+///   - [moduleColor] (tinte suave) → stock > [lowStockThreshold] (adecuado)
+///   - Ámbar  → 0 < stock ≤ [lowStockThreshold] (bajo)
+///   - Rojo   → stock == 0 (agotado)
+class StockBadge extends StatelessWidget {
+  const StockBadge({
+    super.key,
+    required this.stock,
+    required this.unit,
+    this.moduleColor,
+    this.lowStockThreshold = AppConstants.lowStockThreshold,
+  });
+
+  final int stock;
+  final String unit;
+
+  /// Color del módulo que se aplica cuando el stock es adecuado.
+  /// Si es null se usa el verde por defecto.
+  final Color? moduleColor;
+
+  /// Umbral por debajo del cual el stock se clasifica como bajo.
+  final int lowStockThreshold;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color bg;
+    final Color fg;
+    final IconData icon;
+    if (stock == 0) {
+      bg = ColorApp.stockLowBg;
+      fg = ColorApp.stockLowText;
+      icon = Icons.remove_shopping_cart_outlined;
+    } else if (stock <= lowStockThreshold) {
+      bg = ColorApp.stockWarningBg;
+      fg = ColorApp.stockWarningText;
+      icon = Icons.warning_amber_rounded;
+    } else {
+      final Color base = moduleColor ?? ColorApp.stockAdequateText;
+      bg = base.withAlpha(30); // ~12 % opacidad
+      fg = base;
+      icon = Icons.inventory_2_outlined;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Dimens.paddingMd,
+        vertical: Dimens.paddingXs,
+      ),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(Dimens.radiusMd),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: Dimens.iconSizeSm, color: fg),
+          const SizedBox(width: Dimens.paddingXs),
+          Text(
+            '${AppConstants.labelStockDisponible}$stock $unit',
+            style: TextStyle(
+              fontSize: Dimens.fontSizeSm,
+              fontWeight: FontWeight.w600,
+              color: fg,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

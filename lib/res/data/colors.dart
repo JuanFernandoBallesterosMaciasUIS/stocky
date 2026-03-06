@@ -29,6 +29,8 @@ abstract final class ColorApp {
   // Semáforo de stock
   static const Color stockAdequateBg = Color(0xFFDCFCE7);
   static const Color stockAdequateText = Color(0xFF15803D);
+  static const Color stockWarningBg = Color(0xFFFFFBEB); // amber-50
+  static const Color stockWarningText = Color(0xFF92400E); // amber-800
   static const Color stockLowBg = Color(0xFFFEE2E2);
   static const Color stockLowText = Color(0xFFB91C1C);
   static const Color stockLowFg = Color(0xFFEF4444);

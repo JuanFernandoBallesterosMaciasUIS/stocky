@@ -200,8 +200,16 @@ class _PurchaseForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Busca el producto seleccionado para mostrar su stock en tiempo real.
+    dynamic selectedProduct;
+    for (final p in products) {
+      if ((p.id as String) == selectedProductId) {
+        selectedProduct = p;
+        break;
+      }
+    }
     return Container(
-      color: ColorApp.cardBg,
+      color: ColorApp.surface,
       padding: const EdgeInsets.all(Dimens.paddingLg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -209,10 +217,9 @@ class _PurchaseForm extends StatelessWidget {
           DropdownButtonFormField<String>(
             initialValue: selectedProductId.isEmpty ? null : selectedProductId,
             hint: const Text(AppConstants.validationSelectProduct),
-            decoration: const InputDecoration(
-              labelText: AppConstants.hintProductName,
-              border: OutlineInputBorder(),
-              isDense: true,
+            decoration: moduleRoundedInputDecoration(
+              label: AppConstants.hintProductName,
+              focusColor: ColorApp.moduleCompras,
             ),
             items: [
               for (final p in products)
@@ -223,6 +230,14 @@ class _PurchaseForm extends StatelessWidget {
             ],
             onChanged: onProductChanged,
           ),
+          if (selectedProduct != null) ...[
+            const SizedBox(height: Dimens.paddingXs),
+            StockBadge(
+              stock: selectedProduct!.stock as int,
+              unit: selectedProduct!.unit as String,
+              moduleColor: ColorApp.moduleCompras,
+            ),
+          ],
           const SizedBox(height: Dimens.paddingSm),
           Row(
             children: [
@@ -230,33 +245,30 @@ class _PurchaseForm extends StatelessWidget {
                 child: TextField(
                   controller: qtyController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: AppConstants.hintQuantity,
-                    border: OutlineInputBorder(),
-                    isDense: true,
+                  decoration: moduleRoundedInputDecoration(
+                    label: AppConstants.hintQuantity,
+                    focusColor: ColorApp.moduleCompras,
                   ),
                 ),
               ),
-              const SizedBox(width: Dimens.paddingSm),
+              const SizedBox(width: Dimens.paddingMd),
               Expanded(
                 child: TextField(
                   controller: priceController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: AppConstants.hintUnitPrice,
-                    border: OutlineInputBorder(),
-                    isDense: true,
+                  decoration: moduleRoundedInputDecoration(
+                    label: AppConstants.hintUnitPrice,
+                    focusColor: ColorApp.moduleCompras,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: Dimens.paddingSm),
+          const SizedBox(height: Dimens.paddingMd),
           DropdownButtonFormField<PaymentMethod>(
             initialValue: selectedPayment,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              isDense: true,
+            decoration: moduleRoundedInputDecoration(
+              focusColor: ColorApp.moduleCompras,
             ),
             items: [
               for (final m in PaymentMethod.values)
@@ -268,14 +280,12 @@ class _PurchaseForm extends StatelessWidget {
             const SizedBox(height: Dimens.paddingXs),
             Text(error, style: const TextStyle(color: ColorApp.stockLowText)),
           ],
-          const SizedBox(height: Dimens.paddingSm),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: ColorApp.moduleCompras,
-              foregroundColor: ColorApp.surface,
-            ),
+          const SizedBox(height: Dimens.paddingMd),
+          ModulePrimaryButton(
+            label: AppConstants.btnRegister,
             onPressed: onSubmit,
-            child: const Text(AppConstants.btnRegister),
+            color: ColorApp.moduleCompras,
+            shadowColor: ColorApp.moduleComprasShadow,
           ),
         ],
       ),

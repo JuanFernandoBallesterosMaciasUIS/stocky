@@ -204,6 +204,14 @@ class _SaleForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Busca el producto seleccionado para mostrar su stock en tiempo real.
+    dynamic selectedProduct;
+    for (final p in products) {
+      if ((p.id as String) == selectedProductId) {
+        selectedProduct = p;
+        break;
+      }
+    }
     return Container(
       color: ColorApp.surface,
       padding: const EdgeInsets.all(Dimens.paddingLg),
@@ -226,6 +234,14 @@ class _SaleForm extends StatelessWidget {
             ],
             onChanged: onProductChanged,
           ),
+          if (selectedProduct != null) ...[
+            const SizedBox(height: Dimens.paddingXs),
+            StockBadge(
+              stock: selectedProduct!.stock as int,
+              unit: selectedProduct!.unit as String,
+              moduleColor: ColorApp.moduleIngresos,
+            ),
+          ],
           const SizedBox(height: Dimens.paddingMd),
           Row(
             children: [

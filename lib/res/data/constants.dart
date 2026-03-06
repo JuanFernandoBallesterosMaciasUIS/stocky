@@ -90,6 +90,7 @@ abstract final class AppConstants {
   // Etiquetas de estado de stock
   static const String labelAdequate = 'Adecuado';
   static const String labelLowStock = 'Bajo Stock';
+  static const String labelStockDisponible = 'Stock disponible: ';
   static const String labelExpired = 'Vencido';
   static const String labelExpiringSoon = 'Por Vencer';
 

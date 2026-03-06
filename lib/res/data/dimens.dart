@@ -43,7 +43,11 @@ abstract final class Dimens {
 
   // Tipografía
   static const double fontSizeTitle = 28.0;
+  static const double fontSizeSm = 13.0;
   static const double fontSizeXs = 11.0;
+
+  // Íconos pequeños (badges, chips)
+  static const double iconSizeSm = 16.0;
 
   // Botón principal
   static const double primaryBtnHeight = 52.0;

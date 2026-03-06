@@ -49,6 +49,42 @@ class AppStore extends ChangeNotifier {
        _expenses = expenses ?? _initialExpenses(),
        _expensePayments = expensePayments ?? const [];
 
+  /// Constructor para restaurar el estado desde datos persistidos.
+  /// No aplica datos iniciales de ejemplo; usa exactamente lo recibido.
+  AppStore.fromSnapshot({
+    required List<InventoryProduct> products,
+    required List<Sale> sales,
+    required List<ClientPayment> clientPayments,
+    required List<Purchase> purchases,
+    required List<SupplierPayment> supplierPayments,
+    required List<Expense> expenses,
+    required List<ExpensePayment> expensePayments,
+  }) : _products = products,
+       _sales = sales,
+       _clientPayments = clientPayments,
+       _purchases = purchases,
+       _supplierPayments = supplierPayments,
+       _expenses = expenses,
+       _expensePayments = expensePayments;
+
+  // ── Persistencia ──────────────────────────────────────────────────────────────
+
+  /// Callback invocado después de cada mutación para persistir el estado.
+  /// Se inyecta desde main.dart (inversión de dependencia) para mantener
+  /// el store desacoplado del mecanismo de almacenamiento.
+  VoidCallback? _persistCallback;
+
+  /// Registra el callback que se llamará tras cada mutación del estado.
+  void setPersistCallback(VoidCallback callback) {
+    _persistCallback = callback;
+  }
+
+  /// Notifica a los listeners y dispara la persistencia.
+  void _onMutated() {
+    notifyListeners();
+    _persistCallback?.call();
+  }
+
   // ── Getters ──────────────────────────────────────────────────────────────────
   List<InventoryProduct> get products => List.unmodifiable(_products);
   List<Sale> get sales => List.unmodifiable(_sales);
@@ -88,7 +124,7 @@ class AppStore extends ChangeNotifier {
   // ── Mutations: Inventario ─────────────────────────────────────────────────────
   void addInventoryProduct(InventoryProduct product) {
     _products = [..._products, product];
-    notifyListeners();
+    _onMutated();
   }
 
   void updateInventoryProduct(InventoryProduct updated) {
@@ -96,42 +132,42 @@ class AppStore extends ChangeNotifier {
       for (final p in _products)
         if (p.id == updated.id) updated else p,
     ];
-    notifyListeners();
+    _onMutated();
   }
 
   // ── Mutations: Ingresos ───────────────────────────────────────────────────────
   void addSale(Sale sale) {
     _sales = [..._sales, sale];
     _decrementStock(sale.productId, sale.quantity);
-    notifyListeners();
+    _onMutated();
   }
 
   void addClientPayment(ClientPayment payment) {
     _clientPayments = [..._clientPayments, payment];
-    notifyListeners();
+    _onMutated();
   }
 
   // ── Mutations: Compras ────────────────────────────────────────────────────────
   void addPurchase(Purchase purchase) {
     _purchases = [..._purchases, purchase];
     _incrementStock(purchase.productId, purchase.quantity);
-    notifyListeners();
+    _onMutated();
   }
 
   void addSupplierPayment(SupplierPayment payment) {
     _supplierPayments = [..._supplierPayments, payment];
-    notifyListeners();
+    _onMutated();
   }
 
   // ── Mutations: Gastos ─────────────────────────────────────────────────────────
   void addExpense(Expense expense) {
     _expenses = [..._expenses, expense];
-    notifyListeners();
+    _onMutated();
   }
 
   void addExpensePayment(ExpensePayment payment) {
     _expensePayments = [..._expensePayments, payment];
-    notifyListeners();
+    _onMutated();
   }
 
   // ── Private helpers ───────────────────────────────────────────────────────────
@@ -184,7 +220,7 @@ class AppStore extends ChangeNotifier {
         id: 'p1',
         name: 'Café Volcán en granos 250gr',
         stock: 50,
-        unit: 'bolsa',
+        unit: 'unidad',
         icon: Icons.coffee,
         unitCost: 11460,
       ),
@@ -192,7 +228,7 @@ class AppStore extends ChangeNotifier {
         id: 'p2',
         name: 'Café Finca en grano 454gr',
         stock: 50,
-        unit: 'bolsa',
+        unit: 'unidad',
         icon: Icons.coffee,
         unitCost: 45780,
       ),
@@ -200,7 +236,7 @@ class AppStore extends ChangeNotifier {
         id: 'p3',
         name: 'Café Mujeres Cafeteras en granos 454gr',
         stock: 50,
-        unit: 'bolsa',
+        unit: 'unidad',
         icon: Icons.coffee,
         unitCost: 45780,
       ),
@@ -208,7 +244,7 @@ class AppStore extends ChangeNotifier {
         id: 'p4',
         name: 'Café Origen Nariño en granos 454gr',
         stock: 50,
-        unit: 'bolsa',
+        unit: 'unidad',
         icon: Icons.coffee,
         unitCost: 45780,
       ),
@@ -216,7 +252,7 @@ class AppStore extends ChangeNotifier {
         id: 'p5',
         name: 'Café Colina en grano 454gr',
         stock: 50,
-        unit: 'bolsa',
+        unit: 'unidad',
         icon: Icons.coffee,
         unitCost: 36650,
       ),
