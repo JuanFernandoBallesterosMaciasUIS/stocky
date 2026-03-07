@@ -605,6 +605,7 @@ class _VoicePurchaseSheetState extends State<_VoicePurchaseSheet> {
             const SizedBox(height: Dimens.paddingLg),
             ModuleVoiceIndicator(
               isListening: _isListening,
+              accentColor: ColorApp.moduleCompras,
               accentDark: ColorApp.moduleComprasDark,
               accentShadow: ColorApp.moduleComprasShadow,
             ),
@@ -1326,6 +1327,7 @@ class _VoiceSupplierSheetState extends State<_VoiceSupplierSheet> {
             const SizedBox(height: Dimens.paddingLg),
             ModuleVoiceIndicator(
               isListening: _isListening,
+              accentColor: ColorApp.moduleCompras,
               accentDark: ColorApp.moduleComprasDark,
               accentShadow: ColorApp.moduleComprasShadow,
             ),

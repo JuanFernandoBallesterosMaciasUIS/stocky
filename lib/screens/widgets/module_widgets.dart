@@ -420,6 +420,7 @@ class ModuleActionBar extends StatelessWidget {
           ),
           ModuleVoiceFab(
             onTap: onVoice,
+            accentColor: accentColor,
             accentDark: accentDark,
             accentShadow: accentShadow,
           ),
@@ -468,11 +469,13 @@ class ModuleVoiceFab extends StatelessWidget {
   const ModuleVoiceFab({
     super.key,
     required this.onTap,
+    required this.accentColor,
     required this.accentDark,
     required this.accentShadow,
   });
 
   final VoidCallback onTap;
+  final Color accentColor;
   final Color accentDark;
   final Color accentShadow;
 
@@ -486,7 +489,7 @@ class ModuleVoiceFab extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: LinearGradient(
-            colors: [accentDark, ColorApp.emeraldCustom],
+            colors: [accentDark, accentColor],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -510,11 +513,13 @@ class ModuleVoiceIndicator extends StatelessWidget {
   const ModuleVoiceIndicator({
     super.key,
     required this.isListening,
+    required this.accentColor,
     required this.accentDark,
     required this.accentShadow,
   });
 
   final bool isListening;
+  final Color accentColor;
   final Color accentDark;
   final Color accentShadow;
 

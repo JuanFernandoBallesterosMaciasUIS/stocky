@@ -532,6 +532,7 @@ class _VoiceProductSheetState extends State<_VoiceProductSheet> {
             const SizedBox(height: Dimens.paddingLg),
             ModuleVoiceIndicator(
               isListening: _isListening,
+              accentColor: ColorApp.moduleInventario,
               accentDark: ColorApp.moduleInventarioDark,
               accentShadow: ColorApp.moduleInventarioShadow,
             ),

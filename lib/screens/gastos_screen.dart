@@ -531,6 +531,7 @@ class _VoiceExpenseSheetState extends State<_VoiceExpenseSheet> {
             const SizedBox(height: Dimens.paddingLg),
             ModuleVoiceIndicator(
               isListening: _isListening,
+              accentColor: ColorApp.moduleGastos,
               accentDark: ColorApp.moduleGastosDark,
               accentShadow: ColorApp.moduleGastosShadow,
             ),
@@ -1134,6 +1135,7 @@ class _VoiceExpensePaymentSheetState extends State<_VoiceExpensePaymentSheet> {
             const SizedBox(height: Dimens.paddingLg),
             ModuleVoiceIndicator(
               isListening: _isListening,
+              accentColor: ColorApp.moduleGastos,
               accentDark: ColorApp.moduleGastosDark,
               accentShadow: ColorApp.moduleGastosShadow,
             ),

@@ -684,6 +684,7 @@ class _VoiceSaleSheetState extends State<_VoiceSaleSheet> {
             const SizedBox(height: Dimens.paddingLg),
             ModuleVoiceIndicator(
               isListening: _isListening,
+              accentColor: ColorApp.moduleIngresos,
               accentDark: ColorApp.moduleIngresosDark,
               accentShadow: ColorApp.moduleIngresosShadow,
             ),
@@ -1417,6 +1418,7 @@ class _VoiceAbonoSheetState extends State<_VoiceAbonoSheet> {
             const SizedBox(height: Dimens.paddingLg),
             ModuleVoiceIndicator(
               isListening: _isListening,
+              accentColor: ColorApp.moduleIngresos,
               accentDark: ColorApp.moduleIngresosDark,
               accentShadow: ColorApp.moduleIngresosShadow,
             ),
