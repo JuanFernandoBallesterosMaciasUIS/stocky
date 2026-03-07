@@ -8,6 +8,7 @@ import '../res/data/dimens.dart';
 import '../store/store_provider.dart';
 import '../utils/currency_formatter.dart';
 import '../utils/date_filter.dart';
+import 'inventory_edit_sheet.dart';
 import 'widgets/module_widgets.dart';
 
 /// Pantalla de Control de Inventarios con tres pestañas:
@@ -101,6 +102,8 @@ class _ManualEntryTabState extends State<_ManualEntryTab> {
     required int qty,
     required String unit,
     required double cost,
+    DateTime? expiryDate,
+    int lowStockThreshold = AppConstants.lowStockThreshold,
   }) {
     StoreProvider.of(context).addInventoryProduct(
       InventoryProduct(
@@ -110,6 +113,8 @@ class _ManualEntryTabState extends State<_ManualEntryTab> {
         unit: unit,
         icon: Icons.inventory_2,
         unitCost: cost,
+        expiryDate: expiryDate,
+        lowStockThreshold: lowStockThreshold,
       ),
     );
   }
@@ -120,6 +125,34 @@ class _ManualEntryTabState extends State<_ManualEntryTab> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => _AddProductSheet(
+        onRegister: (name, qty, unit, cost, expiryDate, lowStockThreshold) {
+          Navigator.pop(sheetCtx);
+          if (!mounted) return;
+          _registerProduct(
+            context: context,
+            name: name,
+            qty: qty,
+            unit: unit,
+            cost: cost,
+            expiryDate: expiryDate,
+            lowStockThreshold: lowStockThreshold,
+          );
+        },
+      ),
+    );
+  }
+
+  void _openVoiceSheet(BuildContext context) {
+    final store = StoreProvider.of(context);
+    final exHint = store.products.isNotEmpty
+        ? 'Di: "${store.products.first.name.toLowerCase()} cincuenta unidades costo dos mil"'
+        : null;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _VoiceProductSheet(
+        exampleHint: exHint,
         onRegister: (name, qty, unit, cost) {
           Navigator.pop(sheetCtx);
           if (!mounted) return;
@@ -135,22 +168,17 @@ class _ManualEntryTabState extends State<_ManualEntryTab> {
     );
   }
 
-  void _openVoiceSheet(BuildContext context) {
+  void _openEditSheet(BuildContext context, InventoryProduct product) {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (sheetCtx) => _VoiceProductSheet(
-        onRegister: (name, qty, unit, cost) {
+      builder: (sheetCtx) => InventoryEditSheet(
+        product: product,
+        onSave: (updated) {
           Navigator.pop(sheetCtx);
           if (!mounted) return;
-          _registerProduct(
-            context: context,
-            name: name,
-            qty: qty,
-            unit: unit,
-            cost: cost,
-          );
+          StoreProvider.of(context).updateInventoryProduct(updated);
         },
       ),
     );
@@ -169,6 +197,7 @@ class _ManualEntryTabState extends State<_ManualEntryTab> {
                 products: store.products,
                 showCost: true,
                 bottomPadding: Dimens.bottomActionBarPad,
+                onEdit: (p) => _openEditSheet(context, p),
               ),
             ),
           ],
@@ -198,7 +227,14 @@ class _ManualEntryTabState extends State<_ManualEntryTab> {
 class _AddProductSheet extends StatefulWidget {
   const _AddProductSheet({required this.onRegister});
 
-  final void Function(String name, int qty, String unit, double cost)
+  final void Function(
+    String name,
+    int qty,
+    String unit,
+    double cost,
+    DateTime? expiryDate,
+    int lowStockThreshold,
+  )
   onRegister;
 
   @override
@@ -209,14 +245,31 @@ class _AddProductSheetState extends State<_AddProductSheet> {
   final _nameController = TextEditingController();
   final _unitController = TextEditingController();
   final _costController = TextEditingController();
+  final _thresholdController = TextEditingController(
+    text: AppConstants.lowStockThreshold.toString(),
+  );
   int _qty = 1;
+  DateTime? _expiryDate;
 
   @override
   void dispose() {
     _nameController.dispose();
     _unitController.dispose();
     _costController.dispose();
+    _thresholdController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickExpiryDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _expiryDate ?? DateTime.now().add(const Duration(days: 30)),
+      firstDate: DateTime.now(),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null && mounted) {
+      setState(() => _expiryDate = picked);
+    }
   }
 
   bool get _canSubmit {
@@ -227,122 +280,131 @@ class _AddProductSheetState extends State<_AddProductSheet> {
         _qty > 0;
   }
 
+  int get _parsedThreshold {
+    final v = int.tryParse(_thresholdController.text.trim());
+    return (v != null && v > 0) ? v : AppConstants.lowStockThreshold;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: ColorApp.surface,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(Dimens.radiusNavTop),
+    return ModuleSheetContainer(
+      children: [
+        const ModuleSheetHandle(),
+        const SizedBox(height: Dimens.paddingMd),
+        const Text(
+          AppConstants.labelNewProducto,
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
-      ),
-      padding: EdgeInsets.fromLTRB(
-        Dimens.paddingXl,
-        Dimens.paddingMd,
-        Dimens.paddingXl,
-        Dimens.paddingXl + MediaQuery.of(context).padding.bottom,
-      ),
-      child: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const ModuleSheetHandle(),
-              const SizedBox(height: Dimens.paddingMd),
-              const Text(
-                AppConstants.labelNewProducto,
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: Dimens.paddingLg),
-              // ── Nombre ────────────────────────────────────────────────────
-              TextField(
-                controller: _nameController,
-                textCapitalization: TextCapitalization.sentences,
-                onChanged: (_) => setState(() {}),
-                decoration: moduleRoundedInputDecoration(
-                  label: AppConstants.hintProductName,
-                  focusColor: ColorApp.moduleInventario,
-                ),
-              ),
-              const SizedBox(height: Dimens.paddingMd),
-              // ── Cantidad ──────────────────────────────────────────────────
-              Row(
-                children: [
-                  const Text(
-                    AppConstants.hintQuantity,
-                    style: TextStyle(color: ColorApp.slate500),
-                  ),
-                  const Spacer(),
-                  ModuleStepperButton(
-                    icon: Icons.remove,
-                    onTap: _qty > 1 ? () => setState(() => _qty--) : () {},
-                    accentColor: ColorApp.moduleInventario,
-                    accentBg: ColorApp.moduleInventarioBg,
-                    enabled: _qty > 1,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: Dimens.paddingMd,
-                    ),
-                    child: Text(
-                      '$_qty',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  ModuleStepperButton(
-                    icon: Icons.add,
-                    onTap: () => setState(() => _qty++),
-                    accentColor: ColorApp.moduleInventario,
-                    accentBg: ColorApp.moduleInventarioBg,
-                    enabled: true,
-                  ),
-                ],
-              ),
-              const SizedBox(height: Dimens.paddingMd),
-              // ── Unidad ────────────────────────────────────────────────────
-              TextField(
-                controller: _unitController,
-                onChanged: (_) => setState(() {}),
-                decoration: moduleRoundedInputDecoration(
-                  label: AppConstants.hintUnit,
-                  focusColor: ColorApp.moduleInventario,
-                ),
-              ),
-              const SizedBox(height: Dimens.paddingMd),
-              // ── Costo unitario ────────────────────────────────────────────
-              TextField(
-                controller: _costController,
-                keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() {}),
-                decoration: moduleRoundedInputDecoration(
-                  label: AppConstants.hintUnitCost,
-                  focusColor: ColorApp.moduleInventario,
-                ),
-              ),
-              const SizedBox(height: Dimens.paddingLg),
-              ModulePrimaryButton(
-                label: AppConstants.btnRegister,
-                onPressed: _canSubmit
-                    ? () => widget.onRegister(
-                        _nameController.text.trim(),
-                        _qty,
-                        _unitController.text.trim(),
-                        double.parse(_costController.text.trim()),
-                      )
-                    : () {},
-                color: ColorApp.moduleInventario,
-                shadowColor: ColorApp.moduleInventarioShadow,
-                foreground: ColorApp.slate900,
-              ),
-            ],
+        const SizedBox(height: Dimens.paddingLg),
+        // ── Nombre ────────────────────────────────────────────────────
+        TextField(
+          controller: _nameController,
+          textCapitalization: TextCapitalization.sentences,
+          onChanged: (_) => setState(() {}),
+          decoration: moduleRoundedInputDecoration(
+            label: AppConstants.hintProductName,
+            focusColor: ColorApp.moduleInventario,
           ),
         ),
-      ),
+        const SizedBox(height: Dimens.paddingMd),
+        // ── Cantidad ──────────────────────────────────────────────────
+        Row(
+          children: [
+            const Text(
+              AppConstants.hintQuantity,
+              style: TextStyle(color: ColorApp.slate500),
+            ),
+            const Spacer(),
+            ModuleQtyStepper(
+              value: _qty,
+              onChanged: (v) => setState(() => _qty = v),
+              accentColor: ColorApp.moduleInventario,
+              accentBg: ColorApp.moduleInventarioBg,
+              fontSize: 18,
+              horizontalNumberPadding: Dimens.paddingMd,
+            ),
+          ],
+        ),
+        const SizedBox(height: Dimens.paddingMd),
+        // ── Unidad ────────────────────────────────────────────────────
+        TextField(
+          controller: _unitController,
+          onChanged: (_) => setState(() {}),
+          decoration: moduleRoundedInputDecoration(
+            label: AppConstants.hintUnit,
+            focusColor: ColorApp.moduleInventario,
+          ),
+        ),
+        const SizedBox(height: Dimens.paddingMd),
+        // ── Costo unitario ────────────────────────────────────────────
+        TextField(
+          controller: _costController,
+          keyboardType: TextInputType.number,
+          onChanged: (_) => setState(() {}),
+          decoration: moduleRoundedInputDecoration(
+            label: AppConstants.hintUnitCost,
+            focusColor: ColorApp.moduleInventario,
+          ),
+        ),
+        const SizedBox(height: Dimens.paddingMd),
+        // ── Alerta de bajo stock ───────────────────────────────────────
+        TextField(
+          controller: _thresholdController,
+          keyboardType: TextInputType.number,
+          onChanged: (_) => setState(() {}),
+          decoration: moduleRoundedInputDecoration(
+            label: AppConstants.hintLowStockThreshold,
+            focusColor: ColorApp.moduleInventario,
+          ),
+        ),
+        const SizedBox(height: Dimens.paddingMd),
+        // ── Fecha de vencimiento ──────────────────────────────────────
+        InkWell(
+          onTap: _pickExpiryDate,
+          borderRadius: BorderRadius.circular(Dimens.radiusMd),
+          child: InputDecorator(
+            decoration:
+                moduleRoundedInputDecoration(
+                  label: AppConstants.labelHintExpiry,
+                  focusColor: ColorApp.moduleInventario,
+                ).copyWith(
+                  suffixIcon: _expiryDate != null
+                      ? IconButton(
+                          icon: const Icon(Icons.clear, size: 18),
+                          onPressed: () => setState(() => _expiryDate = null),
+                        )
+                      : const Icon(Icons.calendar_today_outlined, size: 18),
+                ),
+            child: Text(
+              _expiryDate != null
+                  ? DateFilter.formatShort(_expiryDate!)
+                  : AppConstants.labelNoExpiryDate,
+              style: TextStyle(
+                color: _expiryDate != null
+                    ? ColorApp.slate900
+                    : ColorApp.slate400,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: Dimens.paddingLg),
+        ModulePrimaryButton(
+          label: AppConstants.btnRegister,
+          onPressed: _canSubmit
+              ? () => widget.onRegister(
+                  _nameController.text.trim(),
+                  _qty,
+                  _unitController.text.trim(),
+                  double.parse(_costController.text.trim()),
+                  _expiryDate,
+                  _parsedThreshold,
+                )
+              : () {},
+          color: ColorApp.moduleInventario,
+          shadowColor: ColorApp.moduleInventarioShadow,
+          foreground: ColorApp.slate900,
+        ),
+      ],
     );
   }
 }
@@ -367,10 +429,11 @@ class _ParsedProduct {
 }
 
 class _VoiceProductSheet extends StatefulWidget {
-  const _VoiceProductSheet({required this.onRegister});
+  const _VoiceProductSheet({required this.onRegister, this.exampleHint});
 
   final void Function(String name, int qty, String unit, double cost)
   onRegister;
+  final String? exampleHint;
 
   @override
   State<_VoiceProductSheet> createState() => _VoiceProductSheetState();
@@ -381,13 +444,29 @@ class _VoiceProductSheetState extends State<_VoiceProductSheet> {
   bool _isListening = false;
   bool _isAvailable = false;
   String _transcript = '';
-  _ParsedProduct? _parsed;
+  String _sessionBase = ''; // acumula texto entre sesiones de escucha
+  VoiceSheetMode _mode = VoiceSheetMode.listening;
   String _voiceError = '';
+
+  // ── Form state (editing mode) ─────────────────────────────────────────────
+  final _nameController = TextEditingController();
+  final _unitController = TextEditingController();
+  final _costController = TextEditingController();
+  int _qty = 1;
 
   @override
   void initState() {
     super.initState();
     _initAndListen();
+  }
+
+  @override
+  void dispose() {
+    _speech.cancel();
+    _nameController.dispose();
+    _unitController.dispose();
+    _costController.dispose();
+    super.dispose();
   }
 
   Future<void> _initAndListen() async {
@@ -396,36 +475,92 @@ class _VoiceProductSheetState extends State<_VoiceProductSheet> {
   }
 
   void _onStatus(String status) {
-    if ((status == 'done' || status == 'notListening') && mounted) {
-      setState(() => _isListening = false);
+    if ((status == 'done' || status == 'notListening') &&
+        _isListening &&
+        mounted) {
+      // El motor pausó — guardar acumulado y reanudar
+      _sessionBase = _transcript;
+      _restartListen();
     }
   }
 
   void _startListening() {
     if (!_isAvailable) return;
+    _sessionBase = '';
     setState(() {
       _isListening = true;
       _transcript = '';
-      _parsed = null;
       _voiceError = '';
+      _mode = VoiceSheetMode.listening;
     });
+    _restartListen();
+  }
+
+  /// Inicia (o reanuda) el reconocimiento acumulando texto entre sesiones.
+  void _restartListen() {
     _speech.listen(
       localeId: 'es_CO',
+      pauseFor: AppConstants.voicePauseFor,
       onResult: (result) {
         if (!mounted) return;
-        setState(() => _transcript = result.recognizedWords);
-        if (result.finalResult) {
-          final parsed = _parseSpeech(result.recognizedWords);
-          setState(() {
-            _isListening = false;
-            _parsed = parsed;
-            _voiceError = parsed == null
-                ? AppConstants.labelVoiceNoMatchProducto
-                : '';
-          });
-        }
+        final combined = _sessionBase.isEmpty
+            ? result.recognizedWords
+            : '$_sessionBase ${result.recognizedWords}';
+        setState(() => _transcript = combined.trim());
       },
     );
+  }
+
+  /// Detiene la escucha y transiciona siempre al formulario editable.
+  /// Rellena lo que se pudo parsear; el resto queda disponible para edición manual.
+  void _finishListening() {
+    if (!_isListening) return;
+    _speech.stop();
+    if (!mounted) return;
+    final parsed = _parseSpeech(_transcript);
+    if (parsed != null) {
+      _populateFormFromParsed(parsed);
+    } else if (_transcript.isNotEmpty) {
+      // Extrae nombre y cantidad aunque falten otros campos
+      final text = _normalize(_transcript);
+      final words = text.split(' ').where((w) => w.isNotEmpty).toList();
+      final numRegex = RegExp(r'^\d+([.,]\d+)?$');
+      final nameWords = words
+          .where((w) => !numRegex.hasMatch(w.replaceAll(',', '.')))
+          .toList(growable: false);
+      if (nameWords.isNotEmpty) {
+        _nameController.text = nameWords
+            .map((w) => w.isNotEmpty ? w[0].toUpperCase() + w.substring(1) : w)
+            .join(' ')
+            .trim();
+      }
+      final numbers = words
+          .map((w) => double.tryParse(w.replaceAll(',', '.')))
+          .whereType<double>()
+          .toList(growable: false);
+      if (numbers.isNotEmpty) _qty = numbers.first.toInt().clamp(1, 999999);
+    }
+    setState(() {
+      _isListening = false;
+      _mode = VoiceSheetMode.editing;
+      _voiceError = '';
+    });
+  }
+
+  /// Rellena los campos del formulario con los datos del parseo.
+  void _populateFormFromParsed(_ParsedProduct parsed) {
+    _nameController.text = parsed.name;
+    _unitController.text = parsed.unit;
+    _costController.text = parsed.cost.toStringAsFixed(0);
+    _qty = parsed.qty;
+  }
+
+  bool get _canSubmit {
+    final cost = double.tryParse(_costController.text.trim());
+    return _nameController.text.trim().isNotEmpty &&
+        _unitController.text.trim().isNotEmpty &&
+        (cost ?? 0) > 0 &&
+        _qty > 0;
   }
 
   /// Interpreta: "arroz 100 kilos 5000"
@@ -503,148 +638,156 @@ class _VoiceProductSheetState extends State<_VoiceProductSheet> {
   }
 
   @override
-  void dispose() {
-    _speech.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: ColorApp.surface,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(Dimens.radiusNavTop),
-        ),
-      ),
-      padding: EdgeInsets.fromLTRB(
-        Dimens.paddingXl,
-        Dimens.paddingMd,
-        Dimens.paddingXl,
-        Dimens.paddingXl + MediaQuery.of(context).padding.bottom,
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ModuleSheetHandle(),
-            const SizedBox(height: Dimens.paddingLg),
-            ModuleVoiceIndicator(
-              isListening: _isListening,
-              accentColor: ColorApp.moduleInventario,
-              accentDark: ColorApp.moduleInventarioDark,
-              accentShadow: ColorApp.moduleInventarioShadow,
-            ),
-            const SizedBox(height: Dimens.paddingMd),
-            Text(
-              _isListening
-                  ? AppConstants.labelListening
-                  : _voiceError.isNotEmpty
-                  ? _voiceError
-                  : _transcript.isEmpty
-                  ? AppConstants.labelVoiceHintProductoLong
-                  : _transcript,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: Dimens.fontSizeSm,
-                color: _voiceError.isNotEmpty
-                    ? ColorApp.stockLowText
-                    : ColorApp.slate500,
-              ),
-            ),
-            if (_parsed != null) ...[
-              const SizedBox(height: Dimens.paddingLg),
-              _ProductConfirmCard(parsed: _parsed!),
-              const SizedBox(height: Dimens.paddingLg),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _startListening,
-                      child: const Text(AppConstants.labelVoiceRetry),
-                    ),
-                  ),
-                  const SizedBox(width: Dimens.paddingMd),
-                  Expanded(
-                    child: ModulePrimaryButton(
-                      label: AppConstants.labelVoiceConfirm,
-                      onPressed: () => widget.onRegister(
-                        _parsed!.name,
-                        _parsed!.qty,
-                        _parsed!.unit,
-                        _parsed!.cost,
-                      ),
-                      color: ColorApp.moduleInventario,
-                      shadowColor: ColorApp.moduleInventarioShadow,
-                      foreground: ColorApp.slate900,
-                    ),
-                  ),
-                ],
-              ),
-            ] else if (!_isListening) ...[
-              const SizedBox(height: Dimens.paddingLg),
-              ModulePrimaryButton(
-                label: AppConstants.labelVoiceRetry,
-                onPressed: _startListening,
-                color: ColorApp.moduleInventario,
-                shadowColor: ColorApp.moduleInventarioShadow,
-                foreground: ColorApp.slate900,
-              ),
-            ],
-            const SizedBox(height: Dimens.paddingMd),
-          ],
-        ),
-      ),
+    return ModuleSheetContainer(
+      children: [
+        const ModuleSheetHandle(),
+        const SizedBox(height: Dimens.paddingLg),
+        if (_mode == VoiceSheetMode.listening)
+          ..._buildListeningBody()
+        else
+          ..._buildEditingBody(),
+        const SizedBox(height: Dimens.paddingMd),
+      ],
     );
   }
-}
 
-class _ProductConfirmCard extends StatelessWidget {
-  const _ProductConfirmCard({required this.parsed});
-
-  final _ParsedProduct parsed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(Dimens.paddingLg),
-      decoration: BoxDecoration(
-        color: ColorApp.moduleInventarioBg,
-        borderRadius: BorderRadius.circular(Dimens.radiusXl),
-        border: Border.all(color: ColorApp.moduleInventario),
+  /// Vista de escucha activa: indicador animado + transcripción en vivo + botón Detener.
+  List<Widget> _buildListeningBody() {
+    return [
+      ModuleVoiceExampleHint(
+        exampleText:
+            widget.exampleHint ?? AppConstants.labelVoiceHintProductoLong,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      const SizedBox(height: Dimens.paddingMd),
+      ModuleVoiceIndicator(
+        isListening: _isListening,
+        accentColor: ColorApp.moduleInventario,
+        accentDark: ColorApp.moduleInventarioDark,
+        accentShadow: ColorApp.moduleInventarioShadow,
+      ),
+      const SizedBox(height: Dimens.paddingMd),
+      Text(
+        _isListening
+            ? (_transcript.isNotEmpty
+                  ? _transcript
+                  : AppConstants.labelListening)
+            : (_voiceError.isNotEmpty
+                  ? _voiceError
+                  : AppConstants.labelVoiceHint),
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: Dimens.fontSizeSm,
+          color: _voiceError.isNotEmpty
+              ? ColorApp.stockLowText
+              : ColorApp.slate500,
+        ),
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      if (_isListening)
+        ModulePrimaryButton(
+          label: AppConstants.labelStopListening,
+          onPressed: _finishListening,
+          color: ColorApp.stockLowText,
+          shadowColor: ColorApp.stockLowText,
+          foreground: ColorApp.surface,
+        )
+      else
+        ModulePrimaryButton(
+          label: AppConstants.labelVoiceRetry,
+          onPressed: _startListening,
+          color: ColorApp.moduleInventario,
+          shadowColor: ColorApp.moduleInventarioShadow,
+          foreground: ColorApp.slate900,
+        ),
+    ];
+  }
+
+  /// Vista de edición: formulario prellenado para revisar y ajustar antes de registrar.
+  List<Widget> _buildEditingBody() {
+    return [
+      const Text(
+        AppConstants.labelVoiceEditTitle,
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      TextField(
+        controller: _nameController,
+        textCapitalization: TextCapitalization.sentences,
+        onChanged: (_) => setState(() {}),
+        decoration: moduleRoundedInputDecoration(
+          label: AppConstants.hintProductName,
+          focusColor: ColorApp.moduleInventario,
+        ),
+      ),
+      const SizedBox(height: Dimens.paddingMd),
+      Row(
         children: [
-          Text(
-            parsed.name,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: ColorApp.slate900,
+          const Text(
+            AppConstants.hintQuantity,
+            style: TextStyle(color: ColorApp.slate500),
+          ),
+          const Spacer(),
+          ModuleQtyStepper(
+            value: _qty,
+            onChanged: (v) => setState(() => _qty = v),
+            accentColor: ColorApp.moduleInventario,
+            accentBg: ColorApp.moduleInventarioBg,
+            fontSize: 18,
+            horizontalNumberPadding: Dimens.paddingMd,
+          ),
+        ],
+      ),
+      const SizedBox(height: Dimens.paddingMd),
+      TextField(
+        controller: _unitController,
+        onChanged: (_) => setState(() {}),
+        decoration: moduleRoundedInputDecoration(
+          label: AppConstants.hintUnit,
+          focusColor: ColorApp.moduleInventario,
+        ),
+      ),
+      const SizedBox(height: Dimens.paddingMd),
+      TextField(
+        controller: _costController,
+        keyboardType: TextInputType.number,
+        onChanged: (_) => setState(() {}),
+        decoration: moduleRoundedInputDecoration(
+          label: AppConstants.hintUnitCost,
+          focusColor: ColorApp.moduleInventario,
+        ),
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _startListening,
+              child: const Text(AppConstants.labelVoiceRetryListening),
             ),
           ),
-          const SizedBox(height: Dimens.paddingXs),
-          Text(
-            '${parsed.qty} ${parsed.unit}',
-            style: const TextStyle(
-              fontSize: Dimens.fontSizeSm,
-              color: ColorApp.slate500,
-            ),
-          ),
-          const SizedBox(height: Dimens.paddingXs),
-          Text(
-            CurrencyFormatter.format(parsed.cost),
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 20,
-              color: ColorApp.moduleInventario,
+          const SizedBox(width: Dimens.paddingMd),
+          Expanded(
+            child: ModulePrimaryButton(
+              label: AppConstants.btnRegister,
+              onPressed: _canSubmit
+                  ? () => widget.onRegister(
+                      _nameController.text.trim(),
+                      _qty,
+                      _unitController.text.trim(),
+                      double.parse(_costController.text.trim()),
+                    )
+                  : () {},
+              color: _canSubmit ? ColorApp.moduleInventario : ColorApp.slate400,
+              shadowColor: _canSubmit
+                  ? ColorApp.moduleInventarioShadow
+                  : ColorApp.slate400,
+              foreground: ColorApp.slate900,
             ),
           ),
         ],
       ),
-    );
+    ];
   }
 }
 
@@ -685,10 +828,14 @@ class _ProductList extends StatelessWidget {
     required this.products,
     this.showCost = false,
     this.bottomPadding = 0,
+    this.onEdit,
   });
   final List<InventoryProduct> products;
   final bool showCost;
   final double bottomPadding;
+
+  /// Callback opcional que habilita el botón de edición en cada ítem.
+  final void Function(InventoryProduct)? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -706,17 +853,27 @@ class _ProductList extends StatelessWidget {
       child: ListView.builder(
         padding: EdgeInsets.only(bottom: bottomPadding),
         itemCount: products.length,
-        itemBuilder: (context, index) =>
-            _ProductItem(product: products[index], showCost: showCost),
+        itemBuilder: (context, index) => _ProductItem(
+          product: products[index],
+          showCost: showCost,
+          onEdit: onEdit,
+        ),
       ),
     );
   }
 }
 
 class _ProductItem extends StatelessWidget {
-  const _ProductItem({required this.product, this.showCost = false});
+  const _ProductItem({
+    required this.product,
+    this.showCost = false,
+    this.onEdit,
+  });
   final InventoryProduct product;
   final bool showCost;
+
+  /// Si se proporciona, muestra un botón de lápiz para editar el producto.
+  final void Function(InventoryProduct)? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -777,6 +934,19 @@ class _ProductItem extends StatelessWidget {
                 ],
               ),
             ),
+            if (onEdit != null)
+              IconButton(
+                icon: const Icon(
+                  Icons.edit_outlined,
+                  size: 20,
+                  color: ColorApp.slate400,
+                ),
+                tooltip: AppConstants.labelEditProduct,
+                onPressed: () {
+                  final callback = onEdit;
+                  if (callback != null) callback(product);
+                },
+              ),
           ],
         ),
       ),

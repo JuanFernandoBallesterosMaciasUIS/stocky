@@ -76,7 +76,7 @@ abstract final class AppConstants {
   static const String inventoryTitle = 'Inventario';
 
   // Etiquetas de tabs de inventario
-  static const String tabManualEntry = 'Registro Manual';
+  static const String tabManualEntry = 'Registro';
   static const String tabStock = 'Stock';
   static const String tabExpiring = 'Por Vencer';
 
@@ -92,6 +92,9 @@ abstract final class AppConstants {
   static const String labelLowStock = 'Bajo Stock';
   static const String labelStockDisponible = 'Stock disponible: ';
 
+  // Voz — configuración del reconocimiento
+  static const Duration voicePauseFor = Duration(seconds: 3);
+
   // Voz — etiquetas de la interfaz de dictado
   static const String labelVoiceHint = 'Toca el micrófono para dictar';
   static const String labelVoiceHintLong = 'Di: "2 arroces en efectivo"';
@@ -100,6 +103,9 @@ abstract final class AppConstants {
       'No encontré el producto. Intenta de nuevo.';
   static const String labelVoiceRetry = 'Reintentar';
   static const String labelVoiceConfirm = 'Confirmar';
+  static const String labelStopListening = 'Detener';
+  static const String labelVoiceEditTitle = 'Revisá y corregí';
+  static const String labelVoiceRetryListening = 'Volver a escuchar';
 
   // Hoja de registro rápido — Ventas
   static const String labelNewSale = 'Nueva venta';
@@ -147,7 +153,9 @@ abstract final class AppConstants {
   static const String labelVoiceHintProductoLong = 'Di: "arroz 100 kilos 5000"';
   static const String labelVoiceNoMatchProducto =
       'No entendí el producto. Intenta de nuevo.';
-  static const String labelHintExpiry = 'Vencimiento (AAAA-MM-DD, opcional)';
+  static const String labelHintExpiry = 'Fecha de vencimiento (opcional)';
+  static const String labelNoExpiryDate = 'Sin fecha de vencimiento';
+  static const String hintLowStockThreshold = 'Alerta de bajo stock (und.)';
 
   static const String labelExpired = 'Vencido';
   static const String labelExpiringSoon = 'Por Vencer';
@@ -195,6 +203,10 @@ abstract final class AppConstants {
   // Botones
   static const String btnRegister = 'Registrar';
   static const String btnSave = 'Guardar';
+  static const String labelEditProduct = 'Editar producto';
+  static const String btnCancel = 'Cancelar';
+  static const String btnAccept = 'Aceptar';
+  static const String labelQtyDialogTitle = 'Ingresá la cantidad';
 
   // Estado vacío
   static const String emptyList = 'No hay registros aún.';

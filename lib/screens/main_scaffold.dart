@@ -20,7 +20,7 @@ class MainScaffold extends StatefulWidget {
 
 class _MainScaffoldState extends State<MainScaffold> {
   /// Índice de la pestaña actualmente seleccionada.
-  int _currentIndex = _NavItem.inventarioIndex;
+  int _currentIndex = _NavItem.ingresosIndex;
 
   /// Pantallas instanciadas una sola vez para preservar su estado.
   final List<Widget> _screens = const [
@@ -204,6 +204,9 @@ class _NavItem {
     required this.icon,
     required this.activeColor,
   });
+
+  /// Índice de la pestaña de Ingresos.
+  static const int ingresosIndex = 0;
 
   /// Índice de la pestaña de Inventario.
   static const int inventarioIndex = 3;

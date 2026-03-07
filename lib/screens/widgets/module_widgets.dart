@@ -5,6 +5,10 @@ import '../../res/data/colors.dart';
 import '../../res/data/constants.dart';
 import '../../res/data/dimens.dart';
 
+/// Modos de la hoja de voz: escuchando activamente o editando el formulario
+/// prellenado con el resultado del parseo.
+enum VoiceSheetMode { listening, editing }
+
 /// Construye un [InputDecoration] con bordes redondeados (radiusXl = 12 px)
 /// y color de foco configurable. Centraliza el estilo de los campos de texto
 /// de todos los módulos para cumplir con el principio DRY.
@@ -286,6 +290,7 @@ class _VoiceTextFieldState extends State<VoiceTextField> {
     setState(() => _isListening = true);
     await _speech.listen(
       localeId: 'es_CO',
+      pauseFor: AppConstants.voicePauseFor,
       onResult: (result) {
         widget.controller.text = result.recognizedWords;
         widget.controller.selection = TextSelection.fromPosition(
@@ -585,6 +590,191 @@ class ModuleStepperButton extends StatelessWidget {
           icon,
           size: 18,
           color: enabled ? accentColor : ColorApp.slate400,
+        ),
+      ),
+    );
+  }
+}
+
+/// Stepper de cantidad con botones ± y edición directa al tocar el número.
+/// Tocar el número central abre un diálogo para ingresar valores grandes sin
+/// tener que incrementar de a uno, respetando el rango [minValue] – [maxValue].
+class ModuleQtyStepper extends StatelessWidget {
+  const ModuleQtyStepper({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    required this.accentColor,
+    required this.accentBg,
+    this.minValue = 1,
+    this.maxValue = 9999,
+    this.fontSize = 32,
+    this.horizontalNumberPadding = Dimens.paddingXl,
+  });
+
+  final int value;
+  final ValueChanged<int> onChanged;
+  final Color accentColor;
+  final Color accentBg;
+  final int minValue;
+  final int maxValue;
+  final double fontSize;
+  final double horizontalNumberPadding;
+
+  Future<void> _showInputDialog(BuildContext context) async {
+    final controller = TextEditingController(text: '$value');
+    final result = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          AppConstants.labelQtyDialogTitle,
+          style: TextStyle(color: accentColor, fontWeight: FontWeight.bold),
+        ),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          autofocus: true,
+          cursorColor: accentColor,
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(),
+            focusedBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: accentColor, width: 2),
+            ),
+          ),
+          onSubmitted: (v) {
+            final parsed = int.tryParse(v.trim());
+            if (parsed != null) Navigator.pop(ctx, parsed);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: TextButton.styleFrom(foregroundColor: ColorApp.slate500),
+            child: const Text(AppConstants.btnCancel),
+          ),
+          TextButton(
+            onPressed: () {
+              final parsed = int.tryParse(controller.text.trim());
+              if (parsed != null) Navigator.pop(ctx, parsed);
+            },
+            style: TextButton.styleFrom(foregroundColor: accentColor),
+            child: const Text(AppConstants.btnAccept),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result != null) {
+      onChanged(result.clamp(minValue, maxValue));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ModuleStepperButton(
+          icon: Icons.remove,
+          onTap: value > minValue ? () => onChanged(value - 1) : () {},
+          accentColor: accentColor,
+          accentBg: accentBg,
+          enabled: value > minValue,
+        ),
+        GestureDetector(
+          onTap: () => _showInputDialog(context),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: horizontalNumberPadding),
+            child: Text(
+              '$value',
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: FontWeight.bold,
+                color: ColorApp.slate900,
+              ),
+            ),
+          ),
+        ),
+        ModuleStepperButton(
+          icon: Icons.add,
+          onTap: value < maxValue ? () => onChanged(value + 1) : () {},
+          accentColor: accentColor,
+          accentBg: accentBg,
+          enabled: value < maxValue,
+        ),
+      ],
+    );
+  }
+}
+
+/// Tarjeta de ejemplo siempre visible durante el dictado por voz.
+/// Muestra una frase de ejemplo para que el usuario sepa cómo dictar.
+class ModuleVoiceExampleHint extends StatelessWidget {
+  const ModuleVoiceExampleHint({super.key, required this.exampleText});
+
+  final String exampleText;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(
+          Icons.lightbulb_outline,
+          size: Dimens.iconSizeSm,
+          color: ColorApp.slate400,
+        ),
+        const SizedBox(width: Dimens.paddingXs),
+        Flexible(
+          child: Text(
+            exampleText,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: Dimens.fontSizeXs,
+              color: ColorApp.slate400,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Envuelve el contenido de un bottom sheet con el contenedor estándar:
+/// bordes redondeados, padding dinámico que sube con el teclado
+/// ([MediaQuery.viewInsets.bottom]) y [SingleChildScrollView] para garantizar
+/// acceso a todos los campos cuando el teclado está visible.
+/// Centraliza el boilerplate repetido en todos los sheets del proyecto (DRY).
+class ModuleSheetContainer extends StatelessWidget {
+  const ModuleSheetContainer({super.key, required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    return Container(
+      decoration: const BoxDecoration(
+        color: ColorApp.surface,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(Dimens.radiusNavTop),
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        Dimens.paddingXl,
+        Dimens.paddingMd,
+        Dimens.paddingXl,
+        Dimens.paddingXl + keyboardHeight,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children,
+          ),
         ),
       ),
     );

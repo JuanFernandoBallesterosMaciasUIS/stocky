@@ -135,11 +135,16 @@ class _ExpenseTabState extends State<_ExpenseTab> {
   }
 
   void _openVoiceSheet(BuildContext context) {
+    final store = StoreProvider.of(context);
+    final exHint = store.expenses.isNotEmpty
+        ? 'Di: "${store.expenses.last.description} ochenta mil efectivo"'
+        : null;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => _VoiceExpenseSheet(
+        exampleHint: exHint,
         onRegister: (desc, amount, payment) {
           Navigator.pop(sheetCtx);
           if (!mounted) return;
@@ -222,7 +227,7 @@ class _AddExpenseSheetState extends State<_AddExpenseSheet> {
         Dimens.paddingXl,
         Dimens.paddingMd,
         Dimens.paddingXl,
-        Dimens.paddingXl + MediaQuery.of(context).padding.bottom,
+        Dimens.paddingXl + MediaQuery.of(context).viewInsets.bottom,
       ),
       child: SafeArea(
         top: false,
@@ -320,10 +325,11 @@ class _ParsedExpense {
 }
 
 class _VoiceExpenseSheet extends StatefulWidget {
-  const _VoiceExpenseSheet({required this.onRegister});
+  const _VoiceExpenseSheet({required this.onRegister, this.exampleHint});
 
   final void Function(String description, double amount, PaymentMethod payment)
   onRegister;
+  final String? exampleHint;
 
   @override
   State<_VoiceExpenseSheet> createState() => _VoiceExpenseSheetState();
@@ -334,13 +340,32 @@ class _VoiceExpenseSheetState extends State<_VoiceExpenseSheet> {
   bool _isListening = false;
   bool _isAvailable = false;
   String _transcript = '';
-  _ParsedExpense? _parsed;
+  String _sessionBase = ''; // acumula texto entre sesiones de escucha
+  VoiceSheetMode _mode = VoiceSheetMode.listening;
   String _voiceError = '';
+
+  // ── Editing form state ────────────────────────────────────────────────────
+  final _descController = TextEditingController();
+  final _amountController = TextEditingController();
+  PaymentMethod _payment = PaymentMethod.efectivo;
+
+  bool get _canSubmit {
+    final amount = double.tryParse(_amountController.text.trim());
+    return _descController.text.trim().isNotEmpty && (amount ?? 0) > 0;
+  }
 
   @override
   void initState() {
     super.initState();
     _initAndListen();
+  }
+
+  @override
+  void dispose() {
+    _speech.cancel();
+    _descController.dispose();
+    _amountController.dispose();
+    super.dispose();
   }
 
   Future<void> _initAndListen() async {
@@ -349,36 +374,78 @@ class _VoiceExpenseSheetState extends State<_VoiceExpenseSheet> {
   }
 
   void _onStatus(String status) {
-    if ((status == 'done' || status == 'notListening') && mounted) {
-      setState(() => _isListening = false);
+    if ((status == 'done' || status == 'notListening') &&
+        _isListening &&
+        mounted) {
+      // El motor pausó — guardar acumulado y reanudar
+      _sessionBase = _transcript;
+      _restartListen();
     }
   }
 
   void _startListening() {
     if (!_isAvailable) return;
+    _sessionBase = '';
     setState(() {
       _isListening = true;
       _transcript = '';
-      _parsed = null;
       _voiceError = '';
+      _mode = VoiceSheetMode.listening;
     });
+    _restartListen();
+  }
+
+  /// Inicia (o reanuda) el reconocimiento acumulando texto entre sesiones.
+  void _restartListen() {
     _speech.listen(
       localeId: 'es_CO',
+      pauseFor: AppConstants.voicePauseFor,
       onResult: (result) {
         if (!mounted) return;
-        setState(() => _transcript = result.recognizedWords);
-        if (result.finalResult) {
-          final parsed = _parseSpeech(result.recognizedWords);
-          setState(() {
-            _isListening = false;
-            _parsed = parsed;
-            _voiceError = parsed == null
-                ? AppConstants.labelVoiceNoMatchGasto
-                : '';
-          });
-        }
+        final combined = _sessionBase.isEmpty
+            ? result.recognizedWords
+            : '$_sessionBase ${result.recognizedWords}';
+        setState(() => _transcript = combined.trim());
       },
     );
+  }
+
+  /// Detiene la escucha y transiciona siempre al formulario editable.
+  /// Rellena lo que se pudo parsear; el resto queda disponible para edición manual.
+  void _finishListening() {
+    if (!_isListening) return;
+    _speech.stop();
+    if (!mounted) return;
+    final parsed = _parseSpeech(_transcript);
+    if (parsed != null) {
+      _descController.text = parsed.description;
+      _amountController.text = parsed.amount.toStringAsFixed(0);
+      _payment = parsed.payment;
+    } else if (_transcript.isNotEmpty) {
+      // Extrae pago y monto parcial aunque la descripción no fuera identificada
+      final text = _normalize(_transcript);
+      _payment = _detectPayment(text);
+      final numMatch = RegExp(r'\b(\d[\d.,]*)\b').firstMatch(text);
+      if (numMatch != null) {
+        final raw = (numMatch.group(1) ?? '')
+            .replaceAll(',', '')
+            .replaceAll('.', '');
+        final amount = double.tryParse(raw);
+        if (amount != null && amount > 0) {
+          _amountController.text = amount.toStringAsFixed(0);
+        }
+      } else {
+        final spanishAmount = _parseSpanishAmount(text);
+        if (spanishAmount != null) {
+          _amountController.text = spanishAmount.toStringAsFixed(0);
+        }
+      }
+    }
+    setState(() {
+      _isListening = false;
+      _mode = VoiceSheetMode.editing;
+      _voiceError = '';
+    });
   }
 
   /// Interpreta: "arriendo ochenta mil efectivo"
@@ -502,12 +569,6 @@ class _VoiceExpenseSheetState extends State<_VoiceExpenseSheet> {
   }
 
   @override
-  void dispose() {
-    _speech.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -524,123 +585,149 @@ class _VoiceExpenseSheetState extends State<_VoiceExpenseSheet> {
       ),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ModuleSheetHandle(),
-            const SizedBox(height: Dimens.paddingLg),
-            ModuleVoiceIndicator(
-              isListening: _isListening,
-              accentColor: ColorApp.moduleGastos,
-              accentDark: ColorApp.moduleGastosDark,
-              accentShadow: ColorApp.moduleGastosShadow,
-            ),
-            const SizedBox(height: Dimens.paddingMd),
-            Text(
-              _isListening
-                  ? AppConstants.labelListening
-                  : _voiceError.isNotEmpty
-                  ? _voiceError
-                  : _transcript.isEmpty
-                  ? AppConstants.labelVoiceHintGastoLong
-                  : _transcript,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: Dimens.fontSizeSm,
-                color: _voiceError.isNotEmpty
-                    ? ColorApp.stockLowText
-                    : ColorApp.slate500,
-              ),
-            ),
-            if (_parsed != null) ...[
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const ModuleSheetHandle(),
               const SizedBox(height: Dimens.paddingLg),
-              _ExpenseConfirmCard(parsed: _parsed!),
-              const SizedBox(height: Dimens.paddingLg),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _startListening,
-                      child: const Text(AppConstants.labelVoiceRetry),
-                    ),
-                  ),
-                  const SizedBox(width: Dimens.paddingMd),
-                  Expanded(
-                    child: ModulePrimaryButton(
-                      label: AppConstants.labelVoiceConfirm,
-                      onPressed: () => widget.onRegister(
-                        _parsed!.description,
-                        _parsed!.amount,
-                        _parsed!.payment,
-                      ),
-                      color: ColorApp.moduleGastos,
-                      shadowColor: ColorApp.moduleGastosShadow,
-                    ),
-                  ),
-                ],
-              ),
-            ] else if (!_isListening) ...[
-              const SizedBox(height: Dimens.paddingLg),
-              ModulePrimaryButton(
-                label: AppConstants.labelVoiceRetry,
-                onPressed: _startListening,
-                color: ColorApp.moduleGastos,
-                shadowColor: ColorApp.moduleGastosShadow,
-              ),
+              if (_mode == VoiceSheetMode.listening)
+                ..._buildListeningBody()
+              else
+                ..._buildEditingBody(),
+              const SizedBox(height: Dimens.paddingMd),
             ],
-            const SizedBox(height: Dimens.paddingMd),
-          ],
+          ),
         ),
       ),
     );
   }
-}
 
-class _ExpenseConfirmCard extends StatelessWidget {
-  const _ExpenseConfirmCard({required this.parsed});
-
-  final _ParsedExpense parsed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(Dimens.paddingLg),
-      decoration: BoxDecoration(
-        color: ColorApp.moduleGastosBg,
-        borderRadius: BorderRadius.circular(Dimens.radiusXl),
-        border: Border.all(color: ColorApp.moduleGastos),
+  /// Vista de escucha activa: indicador + transcripción en vivo + Detener.
+  List<Widget> _buildListeningBody() {
+    return [
+      ModuleVoiceExampleHint(
+        exampleText: widget.exampleHint ?? AppConstants.labelVoiceHintGastoLong,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      const SizedBox(height: Dimens.paddingMd),
+      ModuleVoiceIndicator(
+        isListening: _isListening,
+        accentColor: ColorApp.moduleGastos,
+        accentDark: ColorApp.moduleGastosDark,
+        accentShadow: ColorApp.moduleGastosShadow,
+      ),
+      const SizedBox(height: Dimens.paddingMd),
+      Text(
+        _isListening
+            ? (_transcript.isNotEmpty
+                  ? _transcript
+                  : AppConstants.labelListening)
+            : (_voiceError.isNotEmpty
+                  ? _voiceError
+                  : AppConstants.labelVoiceHint),
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: Dimens.fontSizeSm,
+          color: _voiceError.isNotEmpty
+              ? ColorApp.stockLowText
+              : ColorApp.slate500,
+        ),
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      if (_isListening)
+        ModulePrimaryButton(
+          label: AppConstants.labelStopListening,
+          onPressed: _finishListening,
+          color: ColorApp.stockLowText,
+          shadowColor: ColorApp.stockLowText,
+          foreground: ColorApp.surface,
+        )
+      else
+        ModulePrimaryButton(
+          label: AppConstants.labelVoiceRetry,
+          onPressed: _startListening,
+          color: ColorApp.moduleGastos,
+          shadowColor: ColorApp.moduleGastosShadow,
+        ),
+    ];
+  }
+
+  /// Vista de edición: formulario prellenado para revisar antes de registrar.
+  List<Widget> _buildEditingBody() {
+    return [
+      const Text(
+        AppConstants.labelVoiceEditTitle,
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      TextField(
+        controller: _descController,
+        textCapitalization: TextCapitalization.sentences,
+        onChanged: (_) => setState(() {}),
+        decoration: moduleRoundedInputDecoration(
+          label: AppConstants.hintExpenseDescription,
+          focusColor: ColorApp.moduleGastos,
+        ),
+      ),
+      const SizedBox(height: Dimens.paddingMd),
+      TextField(
+        controller: _amountController,
+        keyboardType: TextInputType.number,
+        onChanged: (_) => setState(() {}),
+        decoration: moduleRoundedInputDecoration(
+          label: AppConstants.hintAmount,
+          focusColor: ColorApp.moduleGastos,
+        ),
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      Wrap(
+        spacing: Dimens.paddingSm,
         children: [
-          Text(
-            parsed.description,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: ColorApp.slate900,
+          for (final m in PaymentMethod.values)
+            ChoiceChip(
+              label: Text(m.label),
+              selected: _payment == m,
+              selectedColor: ColorApp.moduleGastosBg,
+              labelStyle: TextStyle(
+                color: _payment == m
+                    ? ColorApp.moduleGastos
+                    : ColorApp.slate500,
+                fontWeight: _payment == m ? FontWeight.w600 : FontWeight.normal,
+              ),
+              onSelected: (_) => setState(() => _payment = m),
+            ),
+        ],
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _startListening,
+              child: const Text(AppConstants.labelVoiceRetryListening),
             ),
           ),
-          const SizedBox(height: Dimens.paddingXs),
-          Text(
-            parsed.payment.label,
-            style: const TextStyle(
-              fontSize: Dimens.fontSizeSm,
-              color: ColorApp.slate500,
-            ),
-          ),
-          const SizedBox(height: Dimens.paddingXs),
-          Text(
-            CurrencyFormatter.format(parsed.amount),
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 20,
-              color: ColorApp.moduleGastos,
+          const SizedBox(width: Dimens.paddingMd),
+          Expanded(
+            child: ModulePrimaryButton(
+              label: AppConstants.btnRegister,
+              onPressed: _canSubmit
+                  ? () => widget.onRegister(
+                      _descController.text.trim(),
+                      double.parse(_amountController.text.trim()),
+                      _payment,
+                    )
+                  : () {},
+              color: _canSubmit ? ColorApp.moduleGastos : ColorApp.slate400,
+              shadowColor: _canSubmit
+                  ? ColorApp.moduleGastosShadow
+                  : ColorApp.slate400,
             ),
           ),
         ],
       ),
-    );
+    ];
   }
 }
 
@@ -752,11 +839,16 @@ class _ExpensePaymentTabState extends State<_ExpensePaymentTab> {
   }
 
   void _openVoiceSheet(BuildContext context) {
+    final store = StoreProvider.of(context);
+    final exHint = store.expensePayments.isNotEmpty
+        ? 'Di: "${store.expensePayments.last.description} veinte mil nequi"'
+        : null;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => _VoiceExpensePaymentSheet(
+        exampleHint: exHint,
         onRegister: (desc, amount, payment) {
           Navigator.pop(sheetCtx);
           if (!mounted) return;
@@ -840,7 +932,7 @@ class _AddExpensePaymentSheetState extends State<_AddExpensePaymentSheet> {
         Dimens.paddingXl,
         Dimens.paddingMd,
         Dimens.paddingXl,
-        Dimens.paddingXl + MediaQuery.of(context).padding.bottom,
+        Dimens.paddingXl + MediaQuery.of(context).viewInsets.bottom,
       ),
       child: SafeArea(
         top: false,
@@ -925,10 +1017,11 @@ class _AddExpensePaymentSheetState extends State<_AddExpensePaymentSheet> {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _VoiceExpensePaymentSheet extends StatefulWidget {
-  const _VoiceExpensePaymentSheet({required this.onRegister});
+  const _VoiceExpensePaymentSheet({required this.onRegister, this.exampleHint});
 
   final void Function(String description, double amount, PaymentMethod payment)
   onRegister;
+  final String? exampleHint;
 
   @override
   State<_VoiceExpensePaymentSheet> createState() =>
@@ -940,13 +1033,32 @@ class _VoiceExpensePaymentSheetState extends State<_VoiceExpensePaymentSheet> {
   bool _isListening = false;
   bool _isAvailable = false;
   String _transcript = '';
-  _ParsedExpense? _parsed;
+  String _sessionBase = ''; // acumula texto entre sesiones de escucha
+  VoiceSheetMode _mode = VoiceSheetMode.listening;
   String _voiceError = '';
+
+  // ── Editing form state ────────────────────────────────────────────────────
+  final _descController = TextEditingController();
+  final _amountController = TextEditingController();
+  PaymentMethod _payment = PaymentMethod.efectivo;
+
+  bool get _canSubmit {
+    final amount = double.tryParse(_amountController.text.trim());
+    return _descController.text.trim().isNotEmpty && (amount ?? 0) > 0;
+  }
 
   @override
   void initState() {
     super.initState();
     _initAndListen();
+  }
+
+  @override
+  void dispose() {
+    _speech.cancel();
+    _descController.dispose();
+    _amountController.dispose();
+    super.dispose();
   }
 
   Future<void> _initAndListen() async {
@@ -955,36 +1067,78 @@ class _VoiceExpensePaymentSheetState extends State<_VoiceExpensePaymentSheet> {
   }
 
   void _onStatus(String status) {
-    if ((status == 'done' || status == 'notListening') && mounted) {
-      setState(() => _isListening = false);
+    if ((status == 'done' || status == 'notListening') &&
+        _isListening &&
+        mounted) {
+      // El motor pausó — guardar acumulado y reanudar
+      _sessionBase = _transcript;
+      _restartListen();
     }
   }
 
   void _startListening() {
     if (!_isAvailable) return;
+    _sessionBase = '';
     setState(() {
       _isListening = true;
       _transcript = '';
-      _parsed = null;
       _voiceError = '';
+      _mode = VoiceSheetMode.listening;
     });
+    _restartListen();
+  }
+
+  /// Inicia (o reanuda) el reconocimiento acumulando texto entre sesiones.
+  void _restartListen() {
     _speech.listen(
       localeId: 'es_CO',
+      pauseFor: AppConstants.voicePauseFor,
       onResult: (result) {
         if (!mounted) return;
-        setState(() => _transcript = result.recognizedWords);
-        if (result.finalResult) {
-          final parsed = _parseSpeech(result.recognizedWords);
-          setState(() {
-            _isListening = false;
-            _parsed = parsed;
-            _voiceError = parsed == null
-                ? AppConstants.labelVoiceNoMatchPago
-                : '';
-          });
-        }
+        final combined = _sessionBase.isEmpty
+            ? result.recognizedWords
+            : '$_sessionBase ${result.recognizedWords}';
+        setState(() => _transcript = combined.trim());
       },
     );
+  }
+
+  /// Detiene la escucha y transiciona siempre al formulario editable.
+  /// Rellena lo que se pudo parsear; el resto queda disponible para edición manual.
+  void _finishListening() {
+    if (!_isListening) return;
+    _speech.stop();
+    if (!mounted) return;
+    final parsed = _parseSpeech(_transcript);
+    if (parsed != null) {
+      _descController.text = parsed.description;
+      _amountController.text = parsed.amount.toStringAsFixed(0);
+      _payment = parsed.payment;
+    } else if (_transcript.isNotEmpty) {
+      // Extrae pago y monto parcial aunque la descripción no fuera identificada
+      final text = _normalize(_transcript);
+      _payment = _detectPayment(text);
+      final numMatch = RegExp(r'\b(\d[\d.,]*)\b').firstMatch(text);
+      if (numMatch != null) {
+        final raw = (numMatch.group(1) ?? '')
+            .replaceAll(',', '')
+            .replaceAll('.', '');
+        final amount = double.tryParse(raw);
+        if (amount != null && amount > 0) {
+          _amountController.text = amount.toStringAsFixed(0);
+        }
+      } else {
+        final spanishAmount = _parseSpanishAmount(text);
+        if (spanishAmount != null) {
+          _amountController.text = spanishAmount.toStringAsFixed(0);
+        }
+      }
+    }
+    setState(() {
+      _isListening = false;
+      _mode = VoiceSheetMode.editing;
+      _voiceError = '';
+    });
   }
 
   /// Interpreta: "servicios treinta mil nequi"
@@ -1106,12 +1260,6 @@ class _VoiceExpensePaymentSheetState extends State<_VoiceExpensePaymentSheet> {
   }
 
   @override
-  void dispose() {
-    _speech.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -1128,75 +1276,149 @@ class _VoiceExpensePaymentSheetState extends State<_VoiceExpensePaymentSheet> {
       ),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ModuleSheetHandle(),
-            const SizedBox(height: Dimens.paddingLg),
-            ModuleVoiceIndicator(
-              isListening: _isListening,
-              accentColor: ColorApp.moduleGastos,
-              accentDark: ColorApp.moduleGastosDark,
-              accentShadow: ColorApp.moduleGastosShadow,
-            ),
-            const SizedBox(height: Dimens.paddingMd),
-            Text(
-              _isListening
-                  ? AppConstants.labelListening
-                  : _voiceError.isNotEmpty
-                  ? _voiceError
-                  : _transcript.isEmpty
-                  ? AppConstants.labelVoiceHintPagoLong
-                  : _transcript,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: Dimens.fontSizeSm,
-                color: _voiceError.isNotEmpty
-                    ? ColorApp.stockLowText
-                    : ColorApp.slate500,
-              ),
-            ),
-            if (_parsed != null) ...[
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const ModuleSheetHandle(),
               const SizedBox(height: Dimens.paddingLg),
-              _ExpenseConfirmCard(parsed: _parsed!),
-              const SizedBox(height: Dimens.paddingLg),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _startListening,
-                      child: const Text(AppConstants.labelVoiceRetry),
-                    ),
-                  ),
-                  const SizedBox(width: Dimens.paddingMd),
-                  Expanded(
-                    child: ModulePrimaryButton(
-                      label: AppConstants.labelVoiceConfirm,
-                      onPressed: () => widget.onRegister(
-                        _parsed!.description,
-                        _parsed!.amount,
-                        _parsed!.payment,
-                      ),
-                      color: ColorApp.moduleGastos,
-                      shadowColor: ColorApp.moduleGastosShadow,
-                    ),
-                  ),
-                ],
-              ),
-            ] else if (!_isListening) ...[
-              const SizedBox(height: Dimens.paddingLg),
-              ModulePrimaryButton(
-                label: AppConstants.labelVoiceRetry,
-                onPressed: _startListening,
-                color: ColorApp.moduleGastos,
-                shadowColor: ColorApp.moduleGastosShadow,
-              ),
+              if (_mode == VoiceSheetMode.listening)
+                ..._buildListeningBody()
+              else
+                ..._buildEditingBody(),
+              const SizedBox(height: Dimens.paddingMd),
             ],
-            const SizedBox(height: Dimens.paddingMd),
-          ],
+          ),
         ),
       ),
     );
+  }
+
+  /// Vista de escucha activa: indicador + transcripción en vivo + Detener.
+  List<Widget> _buildListeningBody() {
+    return [
+      ModuleVoiceExampleHint(
+        exampleText: widget.exampleHint ?? AppConstants.labelVoiceHintPagoLong,
+      ),
+      const SizedBox(height: Dimens.paddingMd),
+      ModuleVoiceIndicator(
+        isListening: _isListening,
+        accentColor: ColorApp.moduleGastos,
+        accentDark: ColorApp.moduleGastosDark,
+        accentShadow: ColorApp.moduleGastosShadow,
+      ),
+      const SizedBox(height: Dimens.paddingMd),
+      Text(
+        _isListening
+            ? (_transcript.isNotEmpty
+                  ? _transcript
+                  : AppConstants.labelListening)
+            : (_voiceError.isNotEmpty
+                  ? _voiceError
+                  : AppConstants.labelVoiceHint),
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: Dimens.fontSizeSm,
+          color: _voiceError.isNotEmpty
+              ? ColorApp.stockLowText
+              : ColorApp.slate500,
+        ),
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      if (_isListening)
+        ModulePrimaryButton(
+          label: AppConstants.labelStopListening,
+          onPressed: _finishListening,
+          color: ColorApp.stockLowText,
+          shadowColor: ColorApp.stockLowText,
+          foreground: ColorApp.surface,
+        )
+      else
+        ModulePrimaryButton(
+          label: AppConstants.labelVoiceRetry,
+          onPressed: _startListening,
+          color: ColorApp.moduleGastos,
+          shadowColor: ColorApp.moduleGastosShadow,
+        ),
+    ];
+  }
+
+  /// Vista de edición: formulario prellenado para revisar antes de registrar.
+  List<Widget> _buildEditingBody() {
+    return [
+      const Text(
+        AppConstants.labelVoiceEditTitle,
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      TextField(
+        controller: _descController,
+        textCapitalization: TextCapitalization.sentences,
+        onChanged: (_) => setState(() {}),
+        decoration: moduleRoundedInputDecoration(
+          label: AppConstants.hintExpenseDescription,
+          focusColor: ColorApp.moduleGastos,
+        ),
+      ),
+      const SizedBox(height: Dimens.paddingMd),
+      TextField(
+        controller: _amountController,
+        keyboardType: TextInputType.number,
+        onChanged: (_) => setState(() {}),
+        decoration: moduleRoundedInputDecoration(
+          label: AppConstants.hintAmount,
+          focusColor: ColorApp.moduleGastos,
+        ),
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      Wrap(
+        spacing: Dimens.paddingSm,
+        children: [
+          for (final m in PaymentMethod.values)
+            ChoiceChip(
+              label: Text(m.label),
+              selected: _payment == m,
+              selectedColor: ColorApp.moduleGastosBg,
+              labelStyle: TextStyle(
+                color: _payment == m
+                    ? ColorApp.moduleGastos
+                    : ColorApp.slate500,
+                fontWeight: _payment == m ? FontWeight.w600 : FontWeight.normal,
+              ),
+              onSelected: (_) => setState(() => _payment = m),
+            ),
+        ],
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _startListening,
+              child: const Text(AppConstants.labelVoiceRetryListening),
+            ),
+          ),
+          const SizedBox(width: Dimens.paddingMd),
+          Expanded(
+            child: ModulePrimaryButton(
+              label: AppConstants.btnRegister,
+              onPressed: _canSubmit
+                  ? () => widget.onRegister(
+                      _descController.text.trim(),
+                      double.parse(_amountController.text.trim()),
+                      _payment,
+                    )
+                  : () {},
+              color: _canSubmit ? ColorApp.moduleGastos : ColorApp.slate400,
+              shadowColor: _canSubmit
+                  ? ColorApp.moduleGastosShadow
+                  : ColorApp.slate400,
+            ),
+          ),
+        ],
+      ),
+    ];
   }
 }
 

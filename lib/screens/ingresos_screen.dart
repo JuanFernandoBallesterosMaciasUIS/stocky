@@ -229,166 +229,116 @@ class _AddSaleSheetState extends State<_AddSaleSheet> {
     return _qty > 0 && _qty <= (prod.stock as int);
   }
 
-  void _increment() {
-    final prod = _selectedProduct;
-    if (prod == null) return;
-    if (_qty < (prod.stock as int)) setState(() => _qty++);
-  }
-
-  void _decrement() {
-    if (_qty > 1) setState(() => _qty--);
-  }
-
   @override
   Widget build(BuildContext context) {
     final prod = _selectedProduct;
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    return Container(
-      decoration: const BoxDecoration(
-        color: ColorApp.surface,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(Dimens.radiusNavTop),
+    return ModuleSheetContainer(
+      children: [
+        const ModuleSheetHandle(),
+        const SizedBox(height: Dimens.paddingMd),
+        const Text(
+          AppConstants.labelNewSale,
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
-      ),
-      padding: EdgeInsets.fromLTRB(
-        Dimens.paddingXl,
-        Dimens.paddingMd,
-        Dimens.paddingXl,
-        Dimens.paddingXl + bottomInset,
-      ),
-      child: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        const SizedBox(height: Dimens.paddingLg),
+        Wrap(
+          spacing: Dimens.paddingSm,
+          runSpacing: Dimens.paddingSm,
           children: [
-            const ModuleSheetHandle(),
-            const SizedBox(height: Dimens.paddingMd),
-            const Text(
-              AppConstants.labelNewSale,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: Dimens.paddingLg),
-            Wrap(
-              spacing: Dimens.paddingSm,
-              runSpacing: Dimens.paddingSm,
-              children: [
-                for (final p in widget.products)
-                  _ProductChip(
-                    name: p.name as String,
-                    stock: p.stock as int,
-                    price: p.unitCost as double,
-                    selected: (p.id as String) == _selectedId,
-                    onTap: (p.stock as int) > 0
-                        ? () => setState(() {
-                            _selectedId = p.id as String;
-                            _qty = 1;
-                          })
-                        : null,
-                  ),
-              ],
-            ),
-            if (prod != null) ...[
-              const SizedBox(height: Dimens.paddingLg),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    AppConstants.labelUnitPrice,
-                    style: TextStyle(
-                      color: ColorApp.slate500,
-                      fontSize: Dimens.fontSizeSm,
-                    ),
-                  ),
-                  Text(
-                    CurrencyFormatter.format(prod.unitCost as double),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: ColorApp.moduleIngresos,
-                    ),
-                  ),
-                ],
+            for (final p in widget.products)
+              _ProductChip(
+                name: p.name as String,
+                stock: p.stock as int,
+                price: p.unitCost as double,
+                selected: (p.id as String) == _selectedId,
+                onTap: (p.stock as int) > 0
+                    ? () => setState(() {
+                        _selectedId = p.id as String;
+                        _qty = 1;
+                      })
+                    : null,
               ),
-              const SizedBox(height: Dimens.paddingMd),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ModuleStepperButton(
-                    icon: Icons.remove,
-                    onTap: _decrement,
-                    enabled: _qty > 1,
-                    accentColor: ColorApp.moduleIngresos,
-                    accentBg: ColorApp.moduleIngresosBg,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: Dimens.paddingXl,
-                    ),
-                    child: Text(
-                      '$_qty',
-                      style: const TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        color: ColorApp.slate900,
-                      ),
-                    ),
-                  ),
-                  ModuleStepperButton(
-                    icon: Icons.add,
-                    onTap: _increment,
-                    enabled: _qty < (prod.stock as int),
-                    accentColor: ColorApp.moduleIngresos,
-                    accentBg: ColorApp.moduleIngresosBg,
-                  ),
-                ],
-              ),
-              Text(
-                '${AppConstants.labelStockDisponible}${prod.stock} ${prod.unit}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: Dimens.fontSizeXs,
-                  color: ColorApp.slate500,
-                ),
-              ),
-              const SizedBox(height: Dimens.paddingLg),
-              Wrap(
-                spacing: Dimens.paddingSm,
-                children: [
-                  for (final m in PaymentMethod.values)
-                    ChoiceChip(
-                      label: Text(m.label),
-                      selected: _payment == m,
-                      selectedColor: ColorApp.moduleIngresosBg,
-                      labelStyle: TextStyle(
-                        fontSize: Dimens.fontSizeSm,
-                        color: _payment == m
-                            ? ColorApp.moduleIngresos
-                            : ColorApp.slate500,
-                        fontWeight: _payment == m
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                      ),
-                      onSelected: (_) => setState(() => _payment = m),
-                    ),
-                ],
-              ),
-            ],
-            const SizedBox(height: Dimens.paddingLg),
-            ModulePrimaryButton(
-              label: (_canSubmit && prod != null)
-                  ? '${AppConstants.btnRegister} · ${CurrencyFormatter.format((prod.unitCost as double) * _qty)}'
-                  : AppConstants.btnRegister,
-              onPressed: _canSubmit
-                  ? () => widget.onRegister(_selectedId, _qty, _payment)
-                  : () {},
-              color: _canSubmit ? ColorApp.moduleIngresos : ColorApp.slate400,
-              shadowColor: _canSubmit
-                  ? ColorApp.moduleIngresosShadow
-                  : ColorApp.slate400,
-            ),
           ],
         ),
-      ),
+        if (prod != null) ...[
+          const SizedBox(height: Dimens.paddingLg),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                AppConstants.labelUnitPrice,
+                style: TextStyle(
+                  color: ColorApp.slate500,
+                  fontSize: Dimens.fontSizeSm,
+                ),
+              ),
+              Text(
+                CurrencyFormatter.format(prod.unitCost as double),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: ColorApp.moduleIngresos,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: Dimens.paddingMd),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ModuleQtyStepper(
+                value: _qty,
+                onChanged: (v) => setState(() => _qty = v),
+                accentColor: ColorApp.moduleIngresos,
+                accentBg: ColorApp.moduleIngresosBg,
+                maxValue: prod.stock as int,
+              ),
+            ],
+          ),
+          Text(
+            '${AppConstants.labelStockDisponible}${prod.stock} ${prod.unit}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: Dimens.fontSizeXs,
+              color: ColorApp.slate500,
+            ),
+          ),
+          const SizedBox(height: Dimens.paddingLg),
+          Wrap(
+            spacing: Dimens.paddingSm,
+            children: [
+              for (final m in PaymentMethod.values)
+                ChoiceChip(
+                  label: Text(m.label),
+                  selected: _payment == m,
+                  selectedColor: ColorApp.moduleIngresosBg,
+                  labelStyle: TextStyle(
+                    fontSize: Dimens.fontSizeSm,
+                    color: _payment == m
+                        ? ColorApp.moduleIngresos
+                        : ColorApp.slate500,
+                    fontWeight: _payment == m
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                  ),
+                  onSelected: (_) => setState(() => _payment = m),
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: Dimens.paddingLg),
+        ModulePrimaryButton(
+          label: (_canSubmit && prod != null)
+              ? '${AppConstants.btnRegister} · ${CurrencyFormatter.format((prod.unitCost as double) * _qty)}'
+              : AppConstants.btnRegister,
+          onPressed: _canSubmit
+              ? () => widget.onRegister(_selectedId, _qty, _payment)
+              : () {},
+          color: _canSubmit ? ColorApp.moduleIngresos : ColorApp.slate400,
+          shadowColor: _canSubmit
+              ? ColorApp.moduleIngresosShadow
+              : ColorApp.slate400,
+        ),
+      ],
     );
   }
 }
@@ -547,8 +497,27 @@ class _VoiceSaleSheetState extends State<_VoiceSaleSheet> {
   bool _isListening = false;
   bool _isAvailable = false;
   String _transcript = '';
-  _ParsedSale? _parsed;
+  String _sessionBase = ''; // acumula texto entre sesiones de escucha
+  VoiceSheetMode _mode = VoiceSheetMode.listening;
   String _voiceError = '';
+
+  // ── Editing form state ────────────────────────────────────────────────────
+  String _selectedId = '';
+  int _qty = 1;
+  PaymentMethod _payment = PaymentMethod.efectivo;
+
+  dynamic get _selectedProduct {
+    for (final p in widget.products) {
+      if ((p.id as String) == _selectedId) return p;
+    }
+    return null;
+  }
+
+  bool get _canSubmit {
+    final prod = _selectedProduct;
+    if (prod == null) return false;
+    return _qty > 0 && _qty <= (prod.stock as int);
+  }
 
   @override
   void initState() {
@@ -556,41 +525,80 @@ class _VoiceSaleSheetState extends State<_VoiceSaleSheet> {
     _initAndListen();
   }
 
-  /// Inicializa el motor de voz y arranca a escuchar automáticamente.
+  @override
+  void dispose() {
+    _speech.cancel();
+    super.dispose();
+  }
+
   Future<void> _initAndListen() async {
     _isAvailable = await _speech.initialize(onStatus: _onStatus);
     if (_isAvailable && mounted) _startListening();
   }
 
   void _onStatus(String status) {
-    if ((status == 'done' || status == 'notListening') && mounted) {
-      setState(() => _isListening = false);
+    if ((status == 'done' || status == 'notListening') &&
+        _isListening &&
+        mounted) {
+      // El motor pausó — guardar acumulado y reanudar
+      _sessionBase = _transcript;
+      _restartListen();
     }
   }
 
   void _startListening() {
     if (!_isAvailable) return;
+    _sessionBase = '';
     setState(() {
       _isListening = true;
       _transcript = '';
-      _parsed = null;
       _voiceError = '';
+      _mode = VoiceSheetMode.listening;
     });
+    _restartListen();
+  }
+
+  /// Inicia (o reanuda) el reconocimiento acumulando texto entre sesiones.
+  void _restartListen() {
     _speech.listen(
       localeId: 'es_CO',
+      pauseFor: AppConstants.voicePauseFor,
       onResult: (result) {
         if (!mounted) return;
-        setState(() => _transcript = result.recognizedWords);
-        if (result.finalResult) {
-          final parsed = _parseSpeech(result.recognizedWords);
-          setState(() {
-            _isListening = false;
-            _parsed = parsed;
-            _voiceError = parsed == null ? AppConstants.labelVoiceNoMatch : '';
-          });
-        }
+        final combined = _sessionBase.isEmpty
+            ? result.recognizedWords
+            : '$_sessionBase ${result.recognizedWords}';
+        setState(() => _transcript = combined.trim());
       },
     );
+  }
+
+  /// Detiene la escucha y transiciona siempre al formulario editable.
+  /// Rellena lo que se pudo parsear; el resto queda disponible para edición manual.
+  void _finishListening() {
+    if (!_isListening) return;
+    _speech.stop();
+    if (!mounted) return;
+    final parsed = _parseSpeech(_transcript);
+    if (parsed != null) {
+      _selectedId = parsed.product.id as String;
+      _qty = parsed.qty;
+      _payment = parsed.payment;
+    } else if (_transcript.isNotEmpty) {
+      // Extrae cantidad y pago aunque el producto no fuera identificado
+      final text = _normalizeForSearch(_transcript);
+      final numMatch = RegExp(r'\b(\d+)\b').firstMatch(text);
+      final partialQty = numMatch != null
+          ? int.tryParse(numMatch.group(1) ?? '')
+          : null;
+      if (partialQty != null && partialQty > 0) _qty = partialQty;
+      _payment = _detectPayment(text);
+    }
+    setState(() {
+      _isListening = false;
+      _mode = VoiceSheetMode.editing;
+      _voiceError = '';
+    });
   }
 
   /// Interpreta el texto de voz: extrae cantidad, producto y método de pago.
@@ -655,12 +663,6 @@ class _VoiceSaleSheetState extends State<_VoiceSaleSheet> {
   }
 
   @override
-  void dispose() {
-    _speech.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -677,124 +679,175 @@ class _VoiceSaleSheetState extends State<_VoiceSaleSheet> {
       ),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ModuleSheetHandle(),
-            const SizedBox(height: Dimens.paddingLg),
-            ModuleVoiceIndicator(
-              isListening: _isListening,
-              accentColor: ColorApp.moduleIngresos,
-              accentDark: ColorApp.moduleIngresosDark,
-              accentShadow: ColorApp.moduleIngresosShadow,
-            ),
-            const SizedBox(height: Dimens.paddingMd),
-            Text(
-              _isListening
-                  ? AppConstants.labelListening
-                  : _voiceError.isNotEmpty
-                  ? _voiceError
-                  : _transcript.isEmpty
-                  ? AppConstants.labelVoiceHintLong
-                  : _transcript,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: Dimens.fontSizeSm,
-                color: _voiceError.isNotEmpty
-                    ? ColorApp.stockLowText
-                    : ColorApp.slate500,
-              ),
-            ),
-            if (_parsed != null) ...[
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const ModuleSheetHandle(),
               const SizedBox(height: Dimens.paddingLg),
-              _VoiceConfirmCard(parsed: _parsed!),
-              const SizedBox(height: Dimens.paddingLg),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _startListening,
-                      child: const Text(AppConstants.labelVoiceRetry),
-                    ),
-                  ),
-                  const SizedBox(width: Dimens.paddingMd),
-                  Expanded(
-                    child: ModulePrimaryButton(
-                      label: AppConstants.labelVoiceConfirm,
-                      onPressed: () => widget.onRegister(
-                        _parsed!.product.id as String,
-                        _parsed!.qty,
-                        _parsed!.payment,
-                      ),
-                      color: ColorApp.moduleIngresos,
-                      shadowColor: ColorApp.moduleIngresosShadow,
-                    ),
-                  ),
-                ],
-              ),
-            ] else if (!_isListening) ...[
-              const SizedBox(height: Dimens.paddingLg),
-              ModulePrimaryButton(
-                label: AppConstants.labelVoiceRetry,
-                onPressed: _startListening,
-                color: ColorApp.moduleIngresos,
-                shadowColor: ColorApp.moduleIngresosShadow,
-              ),
+              if (_mode == VoiceSheetMode.listening)
+                ..._buildListeningBody()
+              else
+                ..._buildEditingBody(),
+              const SizedBox(height: Dimens.paddingMd),
             ],
-            const SizedBox(height: Dimens.paddingMd),
-          ],
+          ),
         ),
       ),
     );
   }
-}
 
-class _VoiceConfirmCard extends StatelessWidget {
-  const _VoiceConfirmCard({required this.parsed});
-
-  final _ParsedSale parsed;
-
-  @override
-  Widget build(BuildContext context) {
-    final total = (parsed.product.unitCost as double) * parsed.qty;
-    return Container(
-      padding: const EdgeInsets.all(Dimens.paddingLg),
-      decoration: BoxDecoration(
-        color: ColorApp.moduleIngresosBg,
-        borderRadius: BorderRadius.circular(Dimens.radiusXl),
-        border: Border.all(color: ColorApp.moduleIngresos),
+  /// Vista de escucha activa: indicador animado + transcripción en vivo + Detener.
+  List<Widget> _buildListeningBody() {
+    dynamic sampleProduct;
+    for (final p in widget.products) {
+      if ((p.stock as int) > 0) {
+        sampleProduct = p;
+        break;
+      }
+    }
+    if (sampleProduct == null && widget.products.isNotEmpty) {
+      sampleProduct = widget.products.first;
+    }
+    final exHint = sampleProduct != null
+        ? 'Di: "2 ${(sampleProduct.name as String).toLowerCase()} en efectivo"'
+        : AppConstants.labelVoiceHintLong;
+    return [
+      ModuleVoiceExampleHint(exampleText: exHint),
+      const SizedBox(height: Dimens.paddingMd),
+      ModuleVoiceIndicator(
+        isListening: _isListening,
+        accentColor: ColorApp.moduleIngresos,
+        accentDark: ColorApp.moduleIngresosDark,
+        accentShadow: ColorApp.moduleIngresosShadow,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      const SizedBox(height: Dimens.paddingMd),
+      Text(
+        _isListening
+            ? (_transcript.isNotEmpty
+                  ? _transcript
+                  : AppConstants.labelListening)
+            : (_voiceError.isNotEmpty
+                  ? _voiceError
+                  : AppConstants.labelVoiceHint),
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: Dimens.fontSizeSm,
+          color: _voiceError.isNotEmpty
+              ? ColorApp.stockLowText
+              : ColorApp.slate500,
+        ),
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      if (_isListening)
+        ModulePrimaryButton(
+          label: AppConstants.labelStopListening,
+          onPressed: _finishListening,
+          color: ColorApp.stockLowText,
+          shadowColor: ColorApp.stockLowText,
+          foreground: ColorApp.surface,
+        )
+      else
+        ModulePrimaryButton(
+          label: AppConstants.labelVoiceRetry,
+          onPressed: _startListening,
+          color: ColorApp.moduleIngresos,
+          shadowColor: ColorApp.moduleIngresosShadow,
+        ),
+    ];
+  }
+
+  /// Vista de edición: formulario prellenado para revisar antes de registrar.
+  List<Widget> _buildEditingBody() {
+    final prod = _selectedProduct;
+    return [
+      const Text(
+        AppConstants.labelVoiceEditTitle,
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      Wrap(
+        spacing: Dimens.paddingSm,
+        runSpacing: Dimens.paddingSm,
         children: [
-          Text(
-            parsed.product.name as String,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: ColorApp.slate900,
+          for (final p in widget.products)
+            _ProductChip(
+              name: p.name as String,
+              stock: p.stock as int,
+              price: p.unitCost as double,
+              selected: (p.id as String) == _selectedId,
+              onTap: (p.stock as int) > 0
+                  ? () => setState(() {
+                      _selectedId = p.id as String;
+                      _qty = 1;
+                    })
+                  : null,
+            ),
+        ],
+      ),
+      if (prod != null) ...[
+        const SizedBox(height: Dimens.paddingLg),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ModuleQtyStepper(
+              value: _qty,
+              onChanged: (v) => setState(() => _qty = v),
+              accentColor: ColorApp.moduleIngresos,
+              accentBg: ColorApp.moduleIngresosBg,
+              maxValue: prod.stock as int,
+            ),
+          ],
+        ),
+      ],
+      const SizedBox(height: Dimens.paddingLg),
+      Wrap(
+        spacing: Dimens.paddingSm,
+        children: [
+          for (final m in PaymentMethod.values)
+            ChoiceChip(
+              label: Text(m.label),
+              selected: _payment == m,
+              selectedColor: ColorApp.moduleIngresosBg,
+              labelStyle: TextStyle(
+                fontSize: Dimens.fontSizeSm,
+                color: _payment == m
+                    ? ColorApp.moduleIngresos
+                    : ColorApp.slate500,
+                fontWeight: _payment == m ? FontWeight.w600 : FontWeight.normal,
+              ),
+              onSelected: (_) => setState(() => _payment = m),
+            ),
+        ],
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _startListening,
+              child: const Text(AppConstants.labelVoiceRetryListening),
             ),
           ),
-          const SizedBox(height: Dimens.paddingXs),
-          Text(
-            '${parsed.qty} u. × ${CurrencyFormatter.format(parsed.product.unitCost as double)} · ${parsed.payment.label}',
-            style: const TextStyle(
-              fontSize: Dimens.fontSizeSm,
-              color: ColorApp.slate500,
-            ),
-          ),
-          const SizedBox(height: Dimens.paddingXs),
-          Text(
-            CurrencyFormatter.format(total),
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 20,
-              color: ColorApp.moduleIngresos,
+          const SizedBox(width: Dimens.paddingMd),
+          Expanded(
+            child: ModulePrimaryButton(
+              label: _canSubmit && prod != null
+                  ? '${AppConstants.btnRegister} · ${CurrencyFormatter.format((prod.unitCost as double) * _qty)}'
+                  : AppConstants.btnRegister,
+              onPressed: _canSubmit
+                  ? () => widget.onRegister(_selectedId, _qty, _payment)
+                  : () {},
+              color: _canSubmit ? ColorApp.moduleIngresos : ColorApp.slate400,
+              shadowColor: _canSubmit
+                  ? ColorApp.moduleIngresosShadow
+                  : ColorApp.slate400,
             ),
           ),
         ],
       ),
-    );
+    ];
   }
 }
 
@@ -934,11 +987,13 @@ class _AbonosTabState extends State<_AbonosTab> {
   }
 
   void _openVoiceSheet(BuildContext context) {
+    final store = StoreProvider.of(context);
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) => _VoiceAbonoSheet(
+        knownClients: store.knownClientNames,
         onRegister: (client, amount, payment) {
           Navigator.pop(sheetCtx);
           if (!mounted) return;
@@ -1196,10 +1251,14 @@ class _ParsedAbono {
 }
 
 class _VoiceAbonoSheet extends StatefulWidget {
-  const _VoiceAbonoSheet({required this.onRegister});
+  const _VoiceAbonoSheet({
+    required this.onRegister,
+    this.knownClients = const [],
+  });
 
   final void Function(String clientName, double amount, PaymentMethod payment)
   onRegister;
+  final List<String> knownClients;
 
   @override
   State<_VoiceAbonoSheet> createState() => _VoiceAbonoSheetState();
@@ -1210,13 +1269,34 @@ class _VoiceAbonoSheetState extends State<_VoiceAbonoSheet> {
   bool _isListening = false;
   bool _isAvailable = false;
   String _transcript = '';
-  _ParsedAbono? _parsed;
+  String _sessionBase = ''; // acumula texto entre sesiones de escucha
+  VoiceSheetMode _mode = VoiceSheetMode.listening;
   String _voiceError = '';
+
+  // ── Editing form state ────────────────────────────────────────────────────
+  final _clientController = TextEditingController();
+  final _amountController = TextEditingController();
+  PaymentMethod _payment = PaymentMethod.efectivo;
+
+  bool get _canSubmit {
+    final amount = double.tryParse(_amountController.text.trim());
+    return _clientController.text.trim().isNotEmpty &&
+        amount != null &&
+        amount > 0;
+  }
 
   @override
   void initState() {
     super.initState();
     _initAndListen();
+  }
+
+  @override
+  void dispose() {
+    _speech.cancel();
+    _clientController.dispose();
+    _amountController.dispose();
+    super.dispose();
   }
 
   Future<void> _initAndListen() async {
@@ -1225,36 +1305,78 @@ class _VoiceAbonoSheetState extends State<_VoiceAbonoSheet> {
   }
 
   void _onStatus(String status) {
-    if ((status == 'done' || status == 'notListening') && mounted) {
-      setState(() => _isListening = false);
+    if ((status == 'done' || status == 'notListening') &&
+        _isListening &&
+        mounted) {
+      // El motor pausó — guardar acumulado y reanudar
+      _sessionBase = _transcript;
+      _restartListen();
     }
   }
 
   void _startListening() {
     if (!_isAvailable) return;
+    _sessionBase = '';
     setState(() {
       _isListening = true;
       _transcript = '';
-      _parsed = null;
       _voiceError = '';
+      _mode = VoiceSheetMode.listening;
     });
+    _restartListen();
+  }
+
+  /// Inicia (o reanuda) el reconocimiento acumulando texto entre sesiones.
+  void _restartListen() {
     _speech.listen(
       localeId: 'es_CO',
+      pauseFor: AppConstants.voicePauseFor,
       onResult: (result) {
         if (!mounted) return;
-        setState(() => _transcript = result.recognizedWords);
-        if (result.finalResult) {
-          final parsed = _parseAbono(result.recognizedWords);
-          setState(() {
-            _isListening = false;
-            _parsed = parsed;
-            _voiceError = parsed == null
-                ? AppConstants.labelVoiceNoMatchAbono
-                : '';
-          });
-        }
+        final combined = _sessionBase.isEmpty
+            ? result.recognizedWords
+            : '$_sessionBase ${result.recognizedWords}';
+        setState(() => _transcript = combined.trim());
       },
     );
+  }
+
+  /// Detiene la escucha y transiciona siempre al formulario editable.
+  /// Rellena lo que se pudo parsear; el resto queda disponible para edición manual.
+  void _finishListening() {
+    if (!_isListening) return;
+    _speech.stop();
+    if (!mounted) return;
+    final parsed = _parseAbono(_transcript);
+    if (parsed != null) {
+      _clientController.text = parsed.clientName;
+      _amountController.text = parsed.amount.toStringAsFixed(0);
+      _payment = parsed.payment;
+    } else if (_transcript.isNotEmpty) {
+      // Extrae pago y monto parcial aunque la frase no fuera completa
+      final text = _normalizeForAbono(_transcript);
+      _payment = _detectPaymentAbono(text);
+      final numMatch = RegExp(r'\b(\d[\d.,]*)\b').firstMatch(text);
+      if (numMatch != null) {
+        final raw = (numMatch.group(1) ?? '')
+            .replaceAll(',', '')
+            .replaceAll('.', '');
+        final amount = double.tryParse(raw);
+        if (amount != null && amount > 0) {
+          _amountController.text = amount.toStringAsFixed(0);
+        }
+      } else {
+        final spanishAmount = _parseSpanishAmount(text);
+        if (spanishAmount != null) {
+          _amountController.text = spanishAmount.toStringAsFixed(0);
+        }
+      }
+    }
+    setState(() {
+      _isListening = false;
+      _mode = VoiceSheetMode.editing;
+      _voiceError = '';
+    });
   }
 
   /// Interpreta el texto: extrae nombre de cliente, monto y método de pago.
@@ -1265,13 +1387,10 @@ class _VoiceAbonoSheetState extends State<_VoiceAbonoSheet> {
     // 1. Detectar y extraer método de pago
     final payment = _detectPaymentAbono(text);
 
-    // 2. Extraer monto:
-    //    Primero busca número literal (ej. "50000" o "50.000")
-    //    Luego intenta palabras de cantidad (cien, mil, etc.)
+    // 2. Extraer monto
     double? amount;
     String textSinMonto = text;
 
-    // Número literal (dígitos, posiblemente con punto o coma como separador)
     final numMatch = RegExp(r'\b(\d[\d.,]*)\b').firstMatch(text);
     if (numMatch != null) {
       final raw = numMatch.group(1) ?? '';
@@ -1279,14 +1398,13 @@ class _VoiceAbonoSheetState extends State<_VoiceAbonoSheet> {
       amount = double.tryParse(cleaned);
       textSinMonto = text.replaceFirst(numMatch.group(0) ?? '', '');
     } else {
-      // Intentar palabras numéricas básicas (spanish approximate)
       amount = _parseSpanishAmount(text);
     }
 
     if (amount == null || amount <= 0) return null;
 
-    // 3. Extraer nombre de cliente: palabras restantes sin stop words de pago
-    final paymentWords = [
+    // 3. Extraer nombre de cliente
+    const paymentWords = [
       'nequi',
       'daviplata',
       'transferencia',
@@ -1305,7 +1423,6 @@ class _VoiceAbonoSheetState extends State<_VoiceAbonoSheet> {
         .toList(growable: false);
 
     if (words.isEmpty) return null;
-    // Capitalizar primera letra de cada palabra del nombre
     final clientName = words
         .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : w)
         .join(' ')
@@ -1389,12 +1506,6 @@ class _VoiceAbonoSheetState extends State<_VoiceAbonoSheet> {
   }
 
   @override
-  void dispose() {
-    _speech.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -1411,135 +1522,154 @@ class _VoiceAbonoSheetState extends State<_VoiceAbonoSheet> {
       ),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ModuleSheetHandle(),
-            const SizedBox(height: Dimens.paddingLg),
-            ModuleVoiceIndicator(
-              isListening: _isListening,
-              accentColor: ColorApp.moduleIngresos,
-              accentDark: ColorApp.moduleIngresosDark,
-              accentShadow: ColorApp.moduleIngresosShadow,
-            ),
-            const SizedBox(height: Dimens.paddingMd),
-            Text(
-              _isListening
-                  ? AppConstants.labelListening
-                  : _voiceError.isNotEmpty
-                  ? _voiceError
-                  : _transcript.isEmpty
-                  ? AppConstants.labelAbonoVoiceHintLong
-                  : _transcript,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: Dimens.fontSizeSm,
-                color: _voiceError.isNotEmpty
-                    ? ColorApp.stockLowText
-                    : ColorApp.slate500,
-              ),
-            ),
-            if (_parsed != null) ...[
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const ModuleSheetHandle(),
               const SizedBox(height: Dimens.paddingLg),
-              _AbonoConfirmCard(parsed: _parsed!),
-              const SizedBox(height: Dimens.paddingLg),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _startListening,
-                      child: const Text(AppConstants.labelVoiceRetry),
-                    ),
-                  ),
-                  const SizedBox(width: Dimens.paddingMd),
-                  Expanded(
-                    child: ModulePrimaryButton(
-                      label: AppConstants.labelVoiceConfirm,
-                      onPressed: () => widget.onRegister(
-                        _parsed!.clientName,
-                        _parsed!.amount,
-                        _parsed!.payment,
-                      ),
-                      color: ColorApp.moduleIngresos,
-                      shadowColor: ColorApp.moduleIngresosShadow,
-                    ),
-                  ),
-                ],
-              ),
-            ] else if (!_isListening) ...[
-              const SizedBox(height: Dimens.paddingLg),
-              ModulePrimaryButton(
-                label: AppConstants.labelVoiceRetry,
-                onPressed: _startListening,
-                color: ColorApp.moduleIngresos,
-                shadowColor: ColorApp.moduleIngresosShadow,
-              ),
+              if (_mode == VoiceSheetMode.listening)
+                ..._buildListeningBody()
+              else
+                ..._buildEditingBody(),
+              const SizedBox(height: Dimens.paddingMd),
             ],
-            const SizedBox(height: Dimens.paddingMd),
-          ],
+          ),
         ),
       ),
     );
   }
-}
 
-class _AbonoConfirmCard extends StatelessWidget {
-  const _AbonoConfirmCard({required this.parsed});
-
-  final _ParsedAbono parsed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(Dimens.paddingLg),
-      decoration: BoxDecoration(
-        color: ColorApp.moduleIngresosBg,
-        borderRadius: BorderRadius.circular(Dimens.radiusXl),
-        border: Border.all(color: ColorApp.moduleIngresos),
+  /// Vista de escucha activa: indicador + transcripción en vivo + Detener.
+  List<Widget> _buildListeningBody() {
+    final exHint = widget.knownClients.isNotEmpty
+        ? 'Di: "${widget.knownClients.first} veinte mil efectivo"'
+        : AppConstants.labelAbonoVoiceHintLong;
+    return [
+      ModuleVoiceExampleHint(exampleText: exHint),
+      const SizedBox(height: Dimens.paddingMd),
+      ModuleVoiceIndicator(
+        isListening: _isListening,
+        accentColor: ColorApp.moduleIngresos,
+        accentDark: ColorApp.moduleIngresosDark,
+        accentShadow: ColorApp.moduleIngresosShadow,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      const SizedBox(height: Dimens.paddingMd),
+      Text(
+        _isListening
+            ? (_transcript.isNotEmpty
+                  ? _transcript
+                  : AppConstants.labelListening)
+            : (_voiceError.isNotEmpty
+                  ? _voiceError
+                  : AppConstants.labelVoiceHint),
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: Dimens.fontSizeSm,
+          color: _voiceError.isNotEmpty
+              ? ColorApp.stockLowText
+              : ColorApp.slate500,
+        ),
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      if (_isListening)
+        ModulePrimaryButton(
+          label: AppConstants.labelStopListening,
+          onPressed: _finishListening,
+          color: ColorApp.stockLowText,
+          shadowColor: ColorApp.stockLowText,
+          foreground: ColorApp.surface,
+        )
+      else
+        ModulePrimaryButton(
+          label: AppConstants.labelVoiceRetry,
+          onPressed: _startListening,
+          color: ColorApp.moduleIngresos,
+          shadowColor: ColorApp.moduleIngresosShadow,
+        ),
+    ];
+  }
+
+  /// Vista de edición: campos prellenados para revisar y ajustar.
+  List<Widget> _buildEditingBody() {
+    return [
+      const Text(
+        AppConstants.labelVoiceEditTitle,
+        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      TextField(
+        controller: _clientController,
+        textCapitalization: TextCapitalization.words,
+        onChanged: (_) => setState(() {}),
+        decoration: moduleRoundedInputDecoration(
+          label: AppConstants.hintClientName,
+          focusColor: ColorApp.moduleIngresos,
+        ),
+      ),
+      const SizedBox(height: Dimens.paddingMd),
+      TextField(
+        controller: _amountController,
+        keyboardType: TextInputType.number,
+        onChanged: (_) => setState(() {}),
+        decoration: moduleRoundedInputDecoration(
+          label: AppConstants.hintAmount,
+          focusColor: ColorApp.moduleIngresos,
+        ),
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      Wrap(
+        spacing: Dimens.paddingSm,
+        runSpacing: Dimens.paddingSm,
         children: [
-          Row(
-            children: [
-              const CircleAvatar(
-                radius: 18,
-                backgroundColor: ColorApp.moduleIngresos,
-                child: Icon(Icons.person, color: ColorApp.surface, size: 18),
+          for (final m in PaymentMethod.values)
+            ChoiceChip(
+              label: Text(m.label),
+              selected: _payment == m,
+              selectedColor: ColorApp.moduleIngresosBg,
+              labelStyle: TextStyle(
+                fontSize: Dimens.fontSizeSm,
+                color: _payment == m
+                    ? ColorApp.moduleIngresos
+                    : ColorApp.slate500,
+                fontWeight: _payment == m ? FontWeight.w600 : FontWeight.normal,
               ),
-              const SizedBox(width: Dimens.paddingSm),
-              Expanded(
-                child: Text(
-                  parsed.clientName,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: ColorApp.slate900,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: Dimens.paddingXs),
-          Text(
-            parsed.payment.label,
-            style: const TextStyle(
-              fontSize: Dimens.fontSizeSm,
-              color: ColorApp.slate500,
+              onSelected: (_) => setState(() => _payment = m),
+            ),
+        ],
+      ),
+      const SizedBox(height: Dimens.paddingLg),
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: _startListening,
+              child: const Text(AppConstants.labelVoiceRetryListening),
             ),
           ),
-          const SizedBox(height: Dimens.paddingXs),
-          Text(
-            CurrencyFormatter.format(parsed.amount),
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 20,
-              color: ColorApp.moduleIngresos,
+          const SizedBox(width: Dimens.paddingMd),
+          Expanded(
+            child: ModulePrimaryButton(
+              label: _canSubmit
+                  ? '${AppConstants.btnRegister} · ${CurrencyFormatter.format(double.tryParse(_amountController.text.trim()) ?? 0)}'
+                  : AppConstants.btnRegister,
+              onPressed: _canSubmit
+                  ? () => widget.onRegister(
+                      _clientController.text.trim(),
+                      double.parse(_amountController.text.trim()),
+                      _payment,
+                    )
+                  : () {},
+              color: _canSubmit ? ColorApp.moduleIngresos : ColorApp.slate400,
+              shadowColor: _canSubmit
+                  ? ColorApp.moduleIngresosShadow
+                  : ColorApp.slate400,
             ),
           ),
         ],
       ),
-    );
+    ];
   }
 }
 
