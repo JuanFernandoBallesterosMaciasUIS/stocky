@@ -89,6 +89,33 @@ class AppStore extends ChangeNotifier {
   List<InventoryProduct> get products => List.unmodifiable(_products);
   List<Sale> get sales => List.unmodifiable(_sales);
   List<ClientPayment> get clientPayments => List.unmodifiable(_clientPayments);
+
+  /// Lista ordenada de nombres de clientes únicos, derivada de los abonos.
+  /// Usada para sugerir clientes en el formulario de nuevo abono.
+  List<String> get knownClientNames {
+    final seen = <String>{};
+    final names = <String>[];
+    for (final p in _clientPayments) {
+      final name = p.clientName.trim();
+      if (name.isNotEmpty && seen.add(name)) names.add(name);
+    }
+    names.sort();
+    return List.unmodifiable(names);
+  }
+
+  /// Lista ordenada de nombres de proveedores únicos, derivada de los pagos
+  /// a proveedores. Usada para sugerir proveedores en el formulario de pago.
+  List<String> get knownSupplierNames {
+    final seen = <String>{};
+    final names = <String>[];
+    for (final p in _supplierPayments) {
+      final name = p.supplierName.trim();
+      if (name.isNotEmpty && seen.add(name)) names.add(name);
+    }
+    names.sort();
+    return List.unmodifiable(names);
+  }
+
   List<Purchase> get purchases => List.unmodifiable(_purchases);
   List<SupplierPayment> get supplierPayments =>
       List.unmodifiable(_supplierPayments);

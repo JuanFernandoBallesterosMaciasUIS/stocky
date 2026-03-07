@@ -13,9 +13,9 @@ abstract final class Dimens {
   // Espaciado general
   static const double paddingXs = 4.0;
   static const double paddingSm = 8.0;
-  static const double paddingMd = 12.0;
-  static const double paddingLg = 16.0;
-  static const double paddingXl = 24.0;
+  static const double paddingMd = 11.0;
+  static const double paddingLg = 12.0;
+  static const double paddingXl = 21.0;
 
   // Alturas fijas
   static const double productItemMinHeight = 72.0;
@@ -42,7 +42,8 @@ abstract final class Dimens {
   static const double radiusXl = 12.0;
 
   // Tipografía
-  static const double fontSizeTitle = 28.0;
+  static const double fontSizeTab = 15.0;
+  static const double tabHeightTall = 56.0;
   static const double fontSizeSm = 13.0;
   static const double fontSizeXs = 11.0;
 
@@ -53,11 +54,19 @@ abstract final class Dimens {
   static const double primaryBtnHeight = 52.0;
   static const double btnElevation = 6.0;
 
-  // Toolbar con gradiente
-  static const double appBarHeightGradient = 72.0;
+  // Toolbar con gradiente (0 = solo muestra el TabBar, sin espacio de título)
+  static const double appBarHeightGradient = 0.0;
 
   // Barra de navegación inferior moderna
   static const double radiusNavTop = 20.0;
   static const double navPillHeight = 3.0;
   static const double navPillWidth = 24.0;
+
+  // FABs de la barra de acción inferior del módulo Ingresos
+  static const double voiceFabSize = 64.0;
+  static const double addFabSize = 48.0;
+  static const double qtyButtonSize = 40.0;
+
+  // Espacio mínimo inferior de listas para no quedar tapado por la barra de acción
+  static const double bottomActionBarPad = 100.0;
 }

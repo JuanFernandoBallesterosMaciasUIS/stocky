@@ -91,6 +91,64 @@ abstract final class AppConstants {
   static const String labelAdequate = 'Adecuado';
   static const String labelLowStock = 'Bajo Stock';
   static const String labelStockDisponible = 'Stock disponible: ';
+
+  // Voz — etiquetas de la interfaz de dictado
+  static const String labelVoiceHint = 'Toca el micrófono para dictar';
+  static const String labelVoiceHintLong = 'Di: "2 arroces en efectivo"';
+  static const String labelListening = 'Escuchando...';
+  static const String labelVoiceNoMatch =
+      'No encontré el producto. Intenta de nuevo.';
+  static const String labelVoiceRetry = 'Reintentar';
+  static const String labelVoiceConfirm = 'Confirmar';
+
+  // Hoja de registro rápido — Ventas
+  static const String labelNewSale = 'Nueva venta';
+  static const String labelUnitPrice = 'Precio unitario';
+  static const String labelSinStock = 'Sin stock';
+
+  // Hoja de registro rápido — Abonos
+  static const String labelNewAbono = 'Nuevo abono';
+  static const String labelAbonoVoiceHintLong =
+      'Di: "María cincuenta mil nequi"';
+  static const String labelVoiceNoMatchAbono =
+      'No pude entender el abono. Intenta de nuevo.';
+  static const String labelKnownClients = 'Clientes anteriores';
+  static const String labelNewClientHint = 'O escribe un nombre nuevo';
+
+  // Hoja de registro rápido — Compras
+  static const String labelNewCompra = 'Nueva compra';
+  static const String labelVoiceHintCompraLong = 'Di: "5 arroces a tres mil"';
+  static const String labelVoiceNoMatchCompra =
+      'No entendí la compra. Intenta de nuevo.';
+
+  // Hoja de registro rápido — Proveedores
+  static const String labelNewProveedor = 'Nuevo pago a proveedor';
+  static const String labelVoiceHintProveedorLong =
+      'Di: "Juan cien mil efectivo"';
+  static const String labelVoiceNoMatchProveedor =
+      'No entendí el pago. Intenta de nuevo.';
+  static const String labelKnownSuppliers = 'Proveedores anteriores';
+
+  // Hoja de registro rápido — Gastos
+  static const String labelNewGasto = 'Nuevo gasto';
+  static const String labelVoiceHintGastoLong = 'Di: "arriendo ochenta mil"';
+  static const String labelVoiceNoMatchGasto =
+      'No entendí el gasto. Intenta de nuevo.';
+
+  // Hoja de registro rápido — Pagos de gasto
+  static const String labelNewPagoGasto = 'Nuevo pago de gasto';
+  static const String labelVoiceHintPagoLong =
+      'Di: "servicios treinta mil nequi"';
+  static const String labelVoiceNoMatchPago =
+      'No entendí el pago. Intenta de nuevo.';
+
+  // Hoja de registro rápido — Inventario
+  static const String labelNewProducto = 'Nuevo producto';
+  static const String labelVoiceHintProductoLong = 'Di: "arroz 100 kilos 5000"';
+  static const String labelVoiceNoMatchProducto =
+      'No entendí el producto. Intenta de nuevo.';
+  static const String labelHintExpiry = 'Vencimiento (AAAA-MM-DD, opcional)';
+
   static const String labelExpired = 'Vencido';
   static const String labelExpiringSoon = 'Por Vencer';
 

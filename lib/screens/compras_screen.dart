@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import '../models/purchase.dart';
 import '../models/supplier_payment.dart';
@@ -55,19 +56,16 @@ class _ComprasScreenState extends State<ComprasScreen>
             ),
           ),
         ),
-        title: const Text(
-          AppConstants.moduleCompras,
-          style: TextStyle(
-            fontSize: Dimens.fontSizeTitle,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
         bottom: TabBar(
           controller: _tabController,
           labelColor: ColorApp.surface,
           unselectedLabelColor: ColorApp.slate100,
           indicatorColor: ColorApp.surface,
           indicatorWeight: Dimens.tabIndicatorWidth,
+          labelStyle: const TextStyle(
+            fontSize: Dimens.fontSizeTab,
+            fontWeight: FontWeight.w600,
+          ),
           tabs: const [
             Tab(text: AppConstants.tabCompras),
             Tab(text: AppConstants.tabProveedores),
@@ -95,42 +93,17 @@ class _PurchaseTab extends StatefulWidget {
 }
 
 class _PurchaseTabState extends State<_PurchaseTab> {
-  final _qtyController = TextEditingController();
-  final _priceController = TextEditingController();
-  String _selectedProductId = '';
-  PaymentMethod _selectedPayment = PaymentMethod.efectivo;
-  String _error = '';
-
-  @override
-  void dispose() {
-    _qtyController.dispose();
-    _priceController.dispose();
-    super.dispose();
-  }
-
-  void _submit(BuildContext context) {
+  void _registerPurchase({
+    required BuildContext context,
+    required String productId,
+    required int qty,
+    required double price,
+    required PaymentMethod payment,
+  }) {
     final store = StoreProvider.of(context);
-    final qty = int.tryParse(_qtyController.text.trim());
-    final price = double.tryParse(_priceController.text.trim());
-
-    if (_selectedProductId.isEmpty) {
-      setState(() => _error = AppConstants.validationSelectProduct);
-      return;
-    }
-    if (qty == null || qty <= 0 || price == null || price <= 0) {
-      setState(() => _error = AppConstants.validationPositiveNumber);
-      return;
-    }
-
-    final productIndex = store.products.indexWhere(
-      (p) => p.id == _selectedProductId,
-    );
-    if (productIndex == -1) {
-      setState(() => _error = AppConstants.validationSelectProduct);
-      return;
-    }
-    final product = store.products[productIndex];
-
+    final idx = store.products.indexWhere((p) => p.id == productId);
+    if (idx == -1) return;
+    final product = store.products[idx];
     store.addPurchase(
       Purchase(
         id: 'c${DateTime.now().millisecondsSinceEpoch}',
@@ -138,156 +111,655 @@ class _PurchaseTabState extends State<_PurchaseTab> {
         productName: product.name,
         quantity: qty,
         unitPrice: price,
-        paymentMethod: _selectedPayment,
+        paymentMethod: payment,
         date: DateTime.now(),
       ),
     );
+  }
 
-    _qtyController.clear();
-    _priceController.clear();
-    setState(() {
-      _selectedProductId = '';
-      _selectedPayment = PaymentMethod.efectivo;
-      _error = '';
-    });
+  void _openAddSheet(BuildContext context) {
+    final store = StoreProvider.of(context);
+    if (store.products.isEmpty) return;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _AddPurchaseSheet(
+        products: store.products,
+        onRegister: (productId, qty, price, payment) {
+          Navigator.pop(sheetCtx);
+          if (!mounted) return;
+          _registerPurchase(
+            context: context,
+            productId: productId,
+            qty: qty,
+            price: price,
+            payment: payment,
+          );
+        },
+      ),
+    );
+  }
+
+  void _openVoiceSheet(BuildContext context) {
+    final store = StoreProvider.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _VoicePurchaseSheet(
+        products: store.products,
+        onRegister: (productId, qty, price, payment) {
+          Navigator.pop(sheetCtx);
+          if (!mounted) return;
+          _registerPurchase(
+            context: context,
+            productId: productId,
+            qty: qty,
+            price: price,
+            payment: payment,
+          );
+        },
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final store = StoreProvider.of(context);
-    return Column(
+    return Stack(
       children: [
-        _PurchaseForm(
-          qtyController: _qtyController,
-          priceController: _priceController,
-          selectedProductId: _selectedProductId,
-          selectedPayment: _selectedPayment,
-          products: store.products,
-          error: _error,
-          onProductChanged: (v) => setState(() => _selectedProductId = v ?? ''),
-          onPaymentChanged: (v) =>
-              setState(() => _selectedPayment = v ?? PaymentMethod.efectivo),
-          onSubmit: () => _submit(context),
+        _PurchaseList(purchases: store.purchases),
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: ModuleActionBar(
+            onAdd: () => _openAddSheet(context),
+            onVoice: () => _openVoiceSheet(context),
+            accentColor: ColorApp.moduleCompras,
+            accentBg: ColorApp.moduleComprasBg,
+            accentDark: ColorApp.moduleComprasDark,
+            accentShadow: ColorApp.moduleComprasShadow,
+          ),
         ),
-        Expanded(child: _PurchaseList(purchases: store.purchases)),
       ],
     );
   }
 }
 
-class _PurchaseForm extends StatelessWidget {
-  const _PurchaseForm({
-    required this.qtyController,
-    required this.priceController,
-    required this.selectedProductId,
-    required this.selectedPayment,
-    required this.products,
-    required this.error,
-    required this.onProductChanged,
-    required this.onPaymentChanged,
-    required this.onSubmit,
-  });
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom sheet: registro manual de compra
+// ─────────────────────────────────────────────────────────────────────────────
 
-  final TextEditingController qtyController;
-  final TextEditingController priceController;
-  final String selectedProductId;
-  final PaymentMethod selectedPayment;
+class _AddPurchaseSheet extends StatefulWidget {
+  const _AddPurchaseSheet({required this.products, required this.onRegister});
+
   final List<dynamic> products;
-  final String error;
-  final ValueChanged<String?> onProductChanged;
-  final ValueChanged<PaymentMethod?> onPaymentChanged;
-  final VoidCallback onSubmit;
+  final void Function(
+    String productId,
+    int qty,
+    double price,
+    PaymentMethod payment,
+  )
+  onRegister;
+
+  @override
+  State<_AddPurchaseSheet> createState() => _AddPurchaseSheetState();
+}
+
+class _AddPurchaseSheetState extends State<_AddPurchaseSheet> {
+  String _selectedId = '';
+  int _qty = 1;
+  final _priceController = TextEditingController();
+  PaymentMethod _payment = PaymentMethod.efectivo;
+
+  @override
+  void dispose() {
+    _priceController.dispose();
+    super.dispose();
+  }
+
+  dynamic get _selectedProduct {
+    for (final p in widget.products) {
+      if ((p.id as String) == _selectedId) return p;
+    }
+    return null;
+  }
+
+  bool get _canSubmit {
+    final price = double.tryParse(_priceController.text.trim());
+    return _selectedProduct != null && (price ?? 0) > 0;
+  }
+
+  void _decrement() => setState(() => _qty = (_qty - 1).clamp(1, 9999));
+  void _increment() => setState(() => _qty += 1);
 
   @override
   Widget build(BuildContext context) {
-    // Busca el producto seleccionado para mostrar su stock en tiempo real.
-    dynamic selectedProduct;
-    for (final p in products) {
-      if ((p.id as String) == selectedProductId) {
-        selectedProduct = p;
-        break;
-      }
-    }
+    final prod = _selectedProduct;
     return Container(
-      color: ColorApp.surface,
-      padding: const EdgeInsets.all(Dimens.paddingLg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          DropdownButtonFormField<String>(
-            initialValue: selectedProductId.isEmpty ? null : selectedProductId,
-            hint: const Text(AppConstants.validationSelectProduct),
-            decoration: moduleRoundedInputDecoration(
-              label: AppConstants.hintProductName,
-              focusColor: ColorApp.moduleCompras,
-            ),
-            items: [
-              for (final p in products)
-                DropdownMenuItem<String>(
-                  value: p.id as String,
-                  child: Text(p.name as String),
-                ),
-            ],
-            onChanged: onProductChanged,
-          ),
-          if (selectedProduct != null) ...[
-            const SizedBox(height: Dimens.paddingXs),
-            StockBadge(
-              stock: selectedProduct!.stock as int,
-              unit: selectedProduct!.unit as String,
-              moduleColor: ColorApp.moduleCompras,
-            ),
-          ],
-          const SizedBox(height: Dimens.paddingSm),
-          Row(
+      decoration: const BoxDecoration(
+        color: ColorApp.surface,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(Dimens.radiusNavTop),
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        Dimens.paddingXl,
+        Dimens.paddingMd,
+        Dimens.paddingXl,
+        Dimens.paddingXl + MediaQuery.of(context).padding.bottom,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: qtyController,
-                  keyboardType: TextInputType.number,
-                  decoration: moduleRoundedInputDecoration(
-                    label: AppConstants.hintQuantity,
-                    focusColor: ColorApp.moduleCompras,
-                  ),
-                ),
+              const ModuleSheetHandle(),
+              const SizedBox(height: Dimens.paddingMd),
+              const Text(
+                AppConstants.labelNewCompra,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(width: Dimens.paddingMd),
-              Expanded(
-                child: TextField(
-                  controller: priceController,
+              const SizedBox(height: Dimens.paddingLg),
+              // ── Chips de productos ────────────────────────────────────────
+              Wrap(
+                spacing: Dimens.paddingSm,
+                runSpacing: Dimens.paddingSm,
+                children: [
+                  for (final p in widget.products)
+                    _PurchaseProductChip(
+                      name: p.name as String,
+                      stock: p.stock as int,
+                      selected: (p.id as String) == _selectedId,
+                      onTap: () => setState(() {
+                        _selectedId = p.id as String;
+                        _qty = 1;
+                      }),
+                    ),
+                ],
+              ),
+              if (prod != null) ...[
+                const SizedBox(height: Dimens.paddingLg),
+                // ── Stepper cantidad ──────────────────────────────────────
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ModuleStepperButton(
+                      icon: Icons.remove,
+                      onTap: _decrement,
+                      enabled: _qty > 1,
+                      accentColor: ColorApp.moduleCompras,
+                      accentBg: ColorApp.moduleComprasBg,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: Dimens.paddingXl,
+                      ),
+                      child: Text(
+                        '$_qty',
+                        style: const TextStyle(
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          color: ColorApp.slate900,
+                        ),
+                      ),
+                    ),
+                    ModuleStepperButton(
+                      icon: Icons.add,
+                      onTap: _increment,
+                      enabled: true,
+                      accentColor: ColorApp.moduleCompras,
+                      accentBg: ColorApp.moduleComprasBg,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: Dimens.paddingMd),
+                // ── Precio unitario ───────────────────────────────────────
+                TextField(
+                  controller: _priceController,
                   keyboardType: TextInputType.number,
+                  onChanged: (_) => setState(() {}),
                   decoration: moduleRoundedInputDecoration(
                     label: AppConstants.hintUnitPrice,
                     focusColor: ColorApp.moduleCompras,
                   ),
                 ),
+                const SizedBox(height: Dimens.paddingLg),
+                // ── Chips de método de pago ───────────────────────────────
+                Wrap(
+                  spacing: Dimens.paddingSm,
+                  children: [
+                    for (final m in PaymentMethod.values)
+                      ChoiceChip(
+                        label: Text(m.label),
+                        selected: _payment == m,
+                        selectedColor: ColorApp.moduleComprasBg,
+                        labelStyle: TextStyle(
+                          color: _payment == m
+                              ? ColorApp.moduleCompras
+                              : ColorApp.slate500,
+                          fontWeight: _payment == m
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                        ),
+                        onSelected: (_) => setState(() => _payment = m),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: Dimens.paddingLg),
+                ModulePrimaryButton(
+                  label: AppConstants.btnRegister,
+                  onPressed: _canSubmit
+                      ? () => widget.onRegister(
+                          _selectedId,
+                          _qty,
+                          double.parse(_priceController.text.trim()),
+                          _payment,
+                        )
+                      : () {},
+                  color: ColorApp.moduleCompras,
+                  shadowColor: ColorApp.moduleComprasShadow,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom sheet: dictado por voz — Compra
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Resultado del parseo de voz para una compra.
+class _ParsedPurchase {
+  const _ParsedPurchase({
+    required this.product,
+    required this.qty,
+    required this.price,
+    required this.payment,
+  });
+
+  final dynamic product;
+  final int qty;
+  final double price;
+  final PaymentMethod payment;
+}
+
+class _VoicePurchaseSheet extends StatefulWidget {
+  const _VoicePurchaseSheet({required this.products, required this.onRegister});
+
+  final List<dynamic> products;
+  final void Function(
+    String productId,
+    int qty,
+    double price,
+    PaymentMethod payment,
+  )
+  onRegister;
+
+  @override
+  State<_VoicePurchaseSheet> createState() => _VoicePurchaseSheetState();
+}
+
+class _VoicePurchaseSheetState extends State<_VoicePurchaseSheet> {
+  final SpeechToText _speech = SpeechToText();
+  bool _isListening = false;
+  bool _isAvailable = false;
+  String _transcript = '';
+  _ParsedPurchase? _parsed;
+  String _voiceError = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _initAndListen();
+  }
+
+  Future<void> _initAndListen() async {
+    _isAvailable = await _speech.initialize(onStatus: _onStatus);
+    if (_isAvailable && mounted) _startListening();
+  }
+
+  void _onStatus(String status) {
+    if ((status == 'done' || status == 'notListening') && mounted) {
+      setState(() => _isListening = false);
+    }
+  }
+
+  void _startListening() {
+    if (!_isAvailable) return;
+    setState(() {
+      _isListening = true;
+      _transcript = '';
+      _parsed = null;
+      _voiceError = '';
+    });
+    _speech.listen(
+      localeId: 'es_CO',
+      onResult: (result) {
+        if (!mounted) return;
+        setState(() => _transcript = result.recognizedWords);
+        if (result.finalResult) {
+          final parsed = _parseSpeech(result.recognizedWords);
+          setState(() {
+            _isListening = false;
+            _parsed = parsed;
+            _voiceError = parsed == null
+                ? AppConstants.labelVoiceNoMatchCompra
+                : '';
+          });
+        }
+      },
+    );
+  }
+
+  /// Interpreta: "5 arroces a tres mil efectivo"
+  /// → qty=5, product=arroz, price=3000, payment=efectivo
+  _ParsedPurchase? _parseSpeech(String rawText) {
+    final text = _normalize(rawText);
+    final payment = _detectPayment(text);
+
+    // 1. Extraer todos los números literales del texto
+    final numMatches = RegExp(r'\b(\d[\d.,]*)\b').allMatches(text).toList();
+    int qty = 1;
+    double? price;
+
+    if (numMatches.isNotEmpty) {
+      qty = int.tryParse(numMatches.first.group(1) ?? '') ?? 1;
+      if (numMatches.length >= 2) {
+        final raw = (numMatches[1].group(1) ?? '')
+            .replaceAll(',', '')
+            .replaceAll('.', '');
+        price = double.tryParse(raw);
+      }
+    }
+
+    // 2. Si no hay precio literal, buscar en palabras españolas
+    price ??= _parseSpanishAmount(text);
+    if (price == null || price <= 0) return null;
+
+    // 3. Encontrar el producto con mayor coincidencia de palabras
+    dynamic bestProduct;
+    int bestScore = 0;
+    for (final p in widget.products) {
+      final productWords = _normalize(
+        p.name as String,
+      ).split(' ').where((w) => w.length > 2).toList(growable: false);
+      final score = productWords.where(text.contains).length;
+      if (score > bestScore) {
+        bestScore = score;
+        bestProduct = p;
+      }
+    }
+    if (bestProduct == null || bestScore == 0) return null;
+
+    return _ParsedPurchase(
+      product: bestProduct,
+      qty: qty,
+      price: price,
+      payment: payment,
+    );
+  }
+
+  PaymentMethod _detectPayment(String text) {
+    if (text.contains('credito') ||
+        text.contains('fiado') ||
+        text.contains('fio')) {
+      return PaymentMethod.credito;
+    }
+    if (text.contains('nequi') || text.contains('daviplata')) {
+      return PaymentMethod.nequi;
+    }
+    if (text.contains('transferencia') ||
+        text.contains('transfer') ||
+        text.contains('tarjeta')) {
+      return PaymentMethod.transferencia;
+    }
+    return PaymentMethod.efectivo;
+  }
+
+  double? _parseSpanishAmount(String text) {
+    const ones = {
+      'uno': 1,
+      'dos': 2,
+      'tres': 3,
+      'cuatro': 4,
+      'cinco': 5,
+      'seis': 6,
+      'siete': 7,
+      'ocho': 8,
+      'nueve': 9,
+      'diez': 10,
+      'once': 11,
+      'doce': 12,
+      'trece': 13,
+      'catorce': 14,
+      'quince': 15,
+      'veinte': 20,
+      'treinta': 30,
+      'cuarenta': 40,
+      'cincuenta': 50,
+      'sesenta': 60,
+      'setenta': 70,
+      'ochenta': 80,
+      'noventa': 90,
+      'cien': 100,
+      'ciento': 100,
+      'doscientos': 200,
+      'trescientos': 300,
+      'cuatrocientos': 400,
+      'quinientos': 500,
+    };
+    int base = 0;
+    for (final entry in ones.entries) {
+      if (text.contains(entry.key)) base += entry.value;
+    }
+    if (base == 0) return null;
+    return text.contains('mil') ? (base * 1000).toDouble() : base.toDouble();
+  }
+
+  String _normalize(String input) {
+    const accents = 'áéíóúüàèìòùâêîôûäëïöüãõñ';
+    const normal = 'aeiouuaeioaeiouaeiouaoon';
+    var out = input.toLowerCase();
+    for (var i = 0; i < accents.length; i++) {
+      out = out.replaceAll(accents[i], normal[i]);
+    }
+    return out;
+  }
+
+  @override
+  void dispose() {
+    _speech.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: ColorApp.surface,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(Dimens.radiusNavTop),
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        Dimens.paddingXl,
+        Dimens.paddingMd,
+        Dimens.paddingXl,
+        Dimens.paddingXl + MediaQuery.of(context).padding.bottom,
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ModuleSheetHandle(),
+            const SizedBox(height: Dimens.paddingLg),
+            ModuleVoiceIndicator(
+              isListening: _isListening,
+              accentDark: ColorApp.moduleComprasDark,
+              accentShadow: ColorApp.moduleComprasShadow,
+            ),
+            const SizedBox(height: Dimens.paddingMd),
+            Text(
+              _isListening
+                  ? AppConstants.labelListening
+                  : _voiceError.isNotEmpty
+                  ? _voiceError
+                  : _transcript.isEmpty
+                  ? AppConstants.labelVoiceHintCompraLong
+                  : _transcript,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: Dimens.fontSizeSm,
+                color: _voiceError.isNotEmpty
+                    ? ColorApp.stockLowText
+                    : ColorApp.slate500,
+              ),
+            ),
+            if (_parsed != null) ...[
+              const SizedBox(height: Dimens.paddingLg),
+              _PurchaseConfirmCard(parsed: _parsed!),
+              const SizedBox(height: Dimens.paddingLg),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _startListening,
+                      child: const Text(AppConstants.labelVoiceRetry),
+                    ),
+                  ),
+                  const SizedBox(width: Dimens.paddingMd),
+                  Expanded(
+                    child: ModulePrimaryButton(
+                      label: AppConstants.labelVoiceConfirm,
+                      onPressed: () => widget.onRegister(
+                        _parsed!.product.id as String,
+                        _parsed!.qty,
+                        _parsed!.price,
+                        _parsed!.payment,
+                      ),
+                      color: ColorApp.moduleCompras,
+                      shadowColor: ColorApp.moduleComprasShadow,
+                    ),
+                  ),
+                ],
+              ),
+            ] else if (!_isListening) ...[
+              const SizedBox(height: Dimens.paddingLg),
+              ModulePrimaryButton(
+                label: AppConstants.labelVoiceRetry,
+                onPressed: _startListening,
+                color: ColorApp.moduleCompras,
+                shadowColor: ColorApp.moduleComprasShadow,
               ),
             ],
-          ),
-          const SizedBox(height: Dimens.paddingMd),
-          DropdownButtonFormField<PaymentMethod>(
-            initialValue: selectedPayment,
-            decoration: moduleRoundedInputDecoration(
-              focusColor: ColorApp.moduleCompras,
-            ),
-            items: [
-              for (final m in PaymentMethod.values)
-                DropdownMenuItem<PaymentMethod>(value: m, child: Text(m.label)),
-            ],
-            onChanged: onPaymentChanged,
-          ),
-          if (error.isNotEmpty) ...[
-            const SizedBox(height: Dimens.paddingXs),
-            Text(error, style: const TextStyle(color: ColorApp.stockLowText)),
+            const SizedBox(height: Dimens.paddingMd),
           ],
-          const SizedBox(height: Dimens.paddingMd),
-          ModulePrimaryButton(
-            label: AppConstants.btnRegister,
-            onPressed: onSubmit,
-            color: ColorApp.moduleCompras,
-            shadowColor: ColorApp.moduleComprasShadow,
+        ),
+      ),
+    );
+  }
+}
+
+class _PurchaseConfirmCard extends StatelessWidget {
+  const _PurchaseConfirmCard({required this.parsed});
+
+  final _ParsedPurchase parsed;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = parsed.price * parsed.qty;
+    return Container(
+      padding: const EdgeInsets.all(Dimens.paddingLg),
+      decoration: BoxDecoration(
+        color: ColorApp.moduleComprasBg,
+        borderRadius: BorderRadius.circular(Dimens.radiusXl),
+        border: Border.all(color: ColorApp.moduleCompras),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            parsed.product.name as String,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: ColorApp.slate900,
+            ),
+          ),
+          const SizedBox(height: Dimens.paddingXs),
+          Text(
+            '${parsed.qty} u. × ${CurrencyFormatter.format(parsed.price)}'
+            ' · ${parsed.payment.label}',
+            style: const TextStyle(
+              fontSize: Dimens.fontSizeSm,
+              color: ColorApp.slate500,
+            ),
+          ),
+          const SizedBox(height: Dimens.paddingXs),
+          Text(
+            CurrencyFormatter.format(total),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+              color: ColorApp.moduleCompras,
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Chip de producto para el sheet de nueva compra.
+class _PurchaseProductChip extends StatelessWidget {
+  const _PurchaseProductChip({
+    required this.name,
+    required this.stock,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String name;
+  final int stock;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(
+          horizontal: Dimens.paddingMd,
+          vertical: Dimens.paddingSm,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? ColorApp.moduleComprasBg : ColorApp.backgroundLight,
+          borderRadius: BorderRadius.circular(Dimens.radiusXl),
+          border: Border.all(
+            color: selected ? ColorApp.moduleCompras : ColorApp.borderLight,
+            width: selected ? Dimens.borderWidthFocus : Dimens.borderWidth,
+          ),
+        ),
+        child: Text(
+          name,
+          style: TextStyle(
+            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+            fontSize: Dimens.fontSizeSm,
+            color: selected ? ColorApp.moduleCompras : ColorApp.slate900,
+          ),
+        ),
       ),
     );
   }
@@ -300,10 +772,19 @@ class _PurchaseList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (purchases.isEmpty) return const ModuleEmptyList();
+    if (purchases.isEmpty) {
+      return const ColoredBox(
+        color: ColorApp.listSectionBg,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: Dimens.bottomActionBarPad),
+          child: Center(child: Text(AppConstants.emptyList)),
+        ),
+      );
+    }
     return ColoredBox(
       color: ColorApp.listSectionBg,
       child: ListView.builder(
+        padding: const EdgeInsets.only(bottom: Dimens.bottomActionBarPad),
         itemCount: purchases.length,
         itemBuilder: (context, index) {
           final p = purchases[purchases.length - 1 - index];
@@ -325,7 +806,7 @@ class _PurchaseList extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               subtitle: Text(
-                '${p.quantity} u. · ${p.paymentMethod.label} · '
+                '${p.quantity} u. \u00b7 ${p.paymentMethod.label} \u00b7 '
                 '${DateFilter.formatShort(p.date)}',
                 style: const TextStyle(color: ColorApp.slate500),
               ),
@@ -356,10 +837,112 @@ class _SupplierTab extends StatefulWidget {
 }
 
 class _SupplierTabState extends State<_SupplierTab> {
+  void _registerPayment({
+    required BuildContext context,
+    required String supplierName,
+    required double amount,
+    required PaymentMethod payment,
+  }) {
+    StoreProvider.of(context).addSupplierPayment(
+      SupplierPayment(
+        id: 'sp${DateTime.now().millisecondsSinceEpoch}',
+        supplierName: supplierName,
+        amount: amount,
+        paymentMethod: payment,
+        date: DateTime.now(),
+      ),
+    );
+  }
+
+  void _openAddSheet(BuildContext context) {
+    final store = StoreProvider.of(context);
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _AddSupplierSheet(
+        knownSuppliers: store.knownSupplierNames,
+        onRegister: (name, amount, payment) {
+          Navigator.pop(sheetCtx);
+          if (!mounted) return;
+          _registerPayment(
+            context: context,
+            supplierName: name,
+            amount: amount,
+            payment: payment,
+          );
+        },
+      ),
+    );
+  }
+
+  void _openVoiceSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _VoiceSupplierSheet(
+        onRegister: (name, amount, payment) {
+          Navigator.pop(sheetCtx);
+          if (!mounted) return;
+          _registerPayment(
+            context: context,
+            supplierName: name,
+            amount: amount,
+            payment: payment,
+          );
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreProvider.of(context);
+    return Stack(
+      children: [
+        _SupplierList(payments: store.supplierPayments),
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: ModuleActionBar(
+            onAdd: () => _openAddSheet(context),
+            onVoice: () => _openVoiceSheet(context),
+            accentColor: ColorApp.moduleCompras,
+            accentBg: ColorApp.moduleComprasBg,
+            accentDark: ColorApp.moduleComprasDark,
+            accentShadow: ColorApp.moduleComprasShadow,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom sheet: registro manual de pago a proveedor
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AddSupplierSheet extends StatefulWidget {
+  const _AddSupplierSheet({
+    required this.knownSuppliers,
+    required this.onRegister,
+  });
+
+  final List<String> knownSuppliers;
+  final void Function(String supplierName, double amount, PaymentMethod payment)
+  onRegister;
+
+  @override
+  State<_AddSupplierSheet> createState() => _AddSupplierSheetState();
+}
+
+class _AddSupplierSheetState extends State<_AddSupplierSheet> {
   final _supplierController = TextEditingController();
   final _amountController = TextEditingController();
-  PaymentMethod _selectedPayment = PaymentMethod.efectivo;
-  String _error = '';
+  String _selectedSupplier = '';
+  PaymentMethod _payment = PaymentMethod.efectivo;
 
   @override
   void dispose() {
@@ -368,127 +951,556 @@ class _SupplierTabState extends State<_SupplierTab> {
     super.dispose();
   }
 
-  void _submit(BuildContext context) {
-    final store = StoreProvider.of(context);
-    final supplier = _supplierController.text.trim();
+  bool get _hasKnownSuppliers => widget.knownSuppliers.isNotEmpty;
+
+  String get _effectiveName {
+    final typed = _supplierController.text.trim();
+    return typed.isNotEmpty ? typed : _selectedSupplier;
+  }
+
+  bool get _canSubmit {
     final amount = double.tryParse(_amountController.text.trim());
-    if (supplier.isEmpty || amount == null || amount <= 0) {
-      setState(() => _error = AppConstants.validationFillAllFields);
-      return;
-    }
-    store.addSupplierPayment(
-      SupplierPayment(
-        id: 'sp${DateTime.now().millisecondsSinceEpoch}',
-        supplierName: supplier,
-        amount: amount,
-        paymentMethod: _selectedPayment,
-        date: DateTime.now(),
-      ),
-    );
-    _supplierController.clear();
-    _amountController.clear();
+    return _effectiveName.isNotEmpty && (amount ?? 0) > 0;
+  }
+
+  void _selectSupplier(String name) {
     setState(() {
-      _selectedPayment = PaymentMethod.efectivo;
-      _error = '';
+      _selectedSupplier = name;
+      _supplierController.text = name;
+      _supplierController.selection = TextSelection.fromPosition(
+        TextPosition(offset: name.length),
+      );
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final store = StoreProvider.of(context);
-    return Column(
-      children: [
-        _SupplierForm(
-          supplierController: _supplierController,
-          amountController: _amountController,
-          selectedPayment: _selectedPayment,
-          error: _error,
-          onPaymentChanged: (v) =>
-              setState(() => _selectedPayment = v ?? PaymentMethod.efectivo),
-          onSubmit: () => _submit(context),
+    return Container(
+      decoration: const BoxDecoration(
+        color: ColorApp.surface,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(Dimens.radiusNavTop),
         ),
-        Expanded(child: _SupplierList(payments: store.supplierPayments)),
-      ],
+      ),
+      padding: EdgeInsets.fromLTRB(
+        Dimens.paddingXl,
+        Dimens.paddingMd,
+        Dimens.paddingXl,
+        Dimens.paddingXl + MediaQuery.of(context).padding.bottom,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const ModuleSheetHandle(),
+              const SizedBox(height: Dimens.paddingMd),
+              const Text(
+                AppConstants.labelNewProveedor,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: Dimens.paddingLg),
+              // ── Chips de proveedores anteriores ──────────────────────────
+              if (_hasKnownSuppliers) ...[
+                const Text(
+                  AppConstants.labelKnownSuppliers,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: ColorApp.slate500,
+                    fontSize: Dimens.fontSizeSm,
+                  ),
+                ),
+                const SizedBox(height: Dimens.paddingSm),
+                Wrap(
+                  spacing: Dimens.paddingXs,
+                  runSpacing: Dimens.paddingXs,
+                  children: [
+                    for (final s in widget.knownSuppliers)
+                      _SupplierChip(
+                        name: s,
+                        selected: _selectedSupplier == s,
+                        onTap: () => _selectSupplier(s),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: Dimens.paddingMd),
+              ],
+              // ── Campo nombre del proveedor ────────────────────────────────
+              TextField(
+                controller: _supplierController,
+                textCapitalization: TextCapitalization.words,
+                onChanged: (_) => setState(() => _selectedSupplier = ''),
+                decoration: moduleRoundedInputDecoration(
+                  label: _hasKnownSuppliers
+                      ? AppConstants.labelNewClientHint
+                      : AppConstants.hintSupplierName,
+                  focusColor: ColorApp.moduleCompras,
+                ),
+              ),
+              const SizedBox(height: Dimens.paddingMd),
+              // ── Monto ─────────────────────────────────────────────────────
+              TextField(
+                controller: _amountController,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
+                decoration: moduleRoundedInputDecoration(
+                  label: AppConstants.hintAmount,
+                  focusColor: ColorApp.moduleCompras,
+                ),
+              ),
+              const SizedBox(height: Dimens.paddingLg),
+              // ── Chips de método de pago ───────────────────────────────────
+              Wrap(
+                spacing: Dimens.paddingSm,
+                children: [
+                  for (final m in PaymentMethod.values)
+                    ChoiceChip(
+                      label: Text(m.label),
+                      selected: _payment == m,
+                      selectedColor: ColorApp.moduleComprasBg,
+                      labelStyle: TextStyle(
+                        color: _payment == m
+                            ? ColorApp.moduleCompras
+                            : ColorApp.slate500,
+                        fontWeight: _payment == m
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                      onSelected: (_) => setState(() => _payment = m),
+                    ),
+                ],
+              ),
+              const SizedBox(height: Dimens.paddingLg),
+              ModulePrimaryButton(
+                label: AppConstants.btnRegister,
+                onPressed: _canSubmit
+                    ? () => widget.onRegister(
+                        _effectiveName,
+                        double.parse(_amountController.text.trim()),
+                        _payment,
+                      )
+                    : () {},
+                color: ColorApp.moduleCompras,
+                shadowColor: ColorApp.moduleComprasShadow,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
 
-class _SupplierForm extends StatelessWidget {
-  const _SupplierForm({
-    required this.supplierController,
-    required this.amountController,
-    required this.selectedPayment,
-    required this.error,
-    required this.onPaymentChanged,
-    required this.onSubmit,
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom sheet: dictado por voz — Pago a proveedor
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Resultado del parseo de voz para un pago a proveedor.
+class _ParsedSupplier {
+  const _ParsedSupplier({
+    required this.supplierName,
+    required this.amount,
+    required this.payment,
   });
 
-  final TextEditingController supplierController;
-  final TextEditingController amountController;
-  final PaymentMethod selectedPayment;
-  final String error;
-  final ValueChanged<PaymentMethod?> onPaymentChanged;
-  final VoidCallback onSubmit;
+  final String supplierName;
+  final double amount;
+  final PaymentMethod payment;
+}
+
+class _VoiceSupplierSheet extends StatefulWidget {
+  const _VoiceSupplierSheet({required this.onRegister});
+
+  final void Function(String supplierName, double amount, PaymentMethod payment)
+  onRegister;
+
+  @override
+  State<_VoiceSupplierSheet> createState() => _VoiceSupplierSheetState();
+}
+
+class _VoiceSupplierSheetState extends State<_VoiceSupplierSheet> {
+  final SpeechToText _speech = SpeechToText();
+  bool _isListening = false;
+  bool _isAvailable = false;
+  String _transcript = '';
+  _ParsedSupplier? _parsed;
+  String _voiceError = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _initAndListen();
+  }
+
+  Future<void> _initAndListen() async {
+    _isAvailable = await _speech.initialize(onStatus: _onStatus);
+    if (_isAvailable && mounted) _startListening();
+  }
+
+  void _onStatus(String status) {
+    if ((status == 'done' || status == 'notListening') && mounted) {
+      setState(() => _isListening = false);
+    }
+  }
+
+  void _startListening() {
+    if (!_isAvailable) return;
+    setState(() {
+      _isListening = true;
+      _transcript = '';
+      _parsed = null;
+      _voiceError = '';
+    });
+    _speech.listen(
+      localeId: 'es_CO',
+      onResult: (result) {
+        if (!mounted) return;
+        setState(() => _transcript = result.recognizedWords);
+        if (result.finalResult) {
+          final parsed = _parseSupplier(result.recognizedWords);
+          setState(() {
+            _isListening = false;
+            _parsed = parsed;
+            _voiceError = parsed == null
+                ? AppConstants.labelVoiceNoMatchProveedor
+                : '';
+          });
+        }
+      },
+    );
+  }
+
+  /// Interpreta: "Juan cien mil efectivo"
+  /// → supplierName=Juan, amount=100000, payment=efectivo
+  _ParsedSupplier? _parseSupplier(String rawText) {
+    final text = _normalize(rawText);
+    final payment = _detectPayment(text);
+
+    double? amount;
+    String textSinMonto = text;
+
+    final numMatch = RegExp(r'\b(\d[\d.,]*)\b').firstMatch(text);
+    if (numMatch != null) {
+      final raw = (numMatch.group(1) ?? '')
+          .replaceAll(',', '')
+          .replaceAll('.', '');
+      amount = double.tryParse(raw);
+      textSinMonto = text.replaceFirst(numMatch.group(0) ?? '', '');
+    } else {
+      amount = _parseSpanishAmount(text);
+    }
+
+    if (amount == null || amount <= 0) return null;
+
+    const stopWords = [
+      'nequi',
+      'daviplata',
+      'transferencia',
+      'tarjeta',
+      'credito',
+      'fiado',
+      'efectivo',
+      'fio',
+      'transfer',
+      'mil',
+      'pesos',
+      'proveedor',
+      'pago',
+      'a',
+    ];
+    final words = textSinMonto
+        .split(' ')
+        .where((w) => w.length > 1 && !stopWords.contains(w))
+        .toList(growable: false);
+
+    if (words.isEmpty) return null;
+    final name = words
+        .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : w)
+        .join(' ')
+        .trim();
+    if (name.isEmpty) return null;
+
+    return _ParsedSupplier(
+      supplierName: name,
+      amount: amount,
+      payment: payment,
+    );
+  }
+
+  PaymentMethod _detectPayment(String text) {
+    if (text.contains('credito') ||
+        text.contains('fiado') ||
+        text.contains('fio')) {
+      return PaymentMethod.credito;
+    }
+    if (text.contains('nequi') || text.contains('daviplata')) {
+      return PaymentMethod.nequi;
+    }
+    if (text.contains('transferencia') ||
+        text.contains('transfer') ||
+        text.contains('tarjeta')) {
+      return PaymentMethod.transferencia;
+    }
+    return PaymentMethod.efectivo;
+  }
+
+  double? _parseSpanishAmount(String text) {
+    const ones = {
+      'uno': 1,
+      'dos': 2,
+      'tres': 3,
+      'cuatro': 4,
+      'cinco': 5,
+      'seis': 6,
+      'siete': 7,
+      'ocho': 8,
+      'nueve': 9,
+      'diez': 10,
+      'once': 11,
+      'doce': 12,
+      'trece': 13,
+      'catorce': 14,
+      'quince': 15,
+      'veinte': 20,
+      'treinta': 30,
+      'cuarenta': 40,
+      'cincuenta': 50,
+      'sesenta': 60,
+      'setenta': 70,
+      'ochenta': 80,
+      'noventa': 90,
+      'cien': 100,
+      'ciento': 100,
+      'doscientos': 200,
+      'trescientos': 300,
+      'cuatrocientos': 400,
+      'quinientos': 500,
+    };
+    int base = 0;
+    for (final entry in ones.entries) {
+      if (text.contains(entry.key)) base += entry.value;
+    }
+    if (base == 0) return null;
+    return text.contains('mil') ? (base * 1000).toDouble() : base.toDouble();
+  }
+
+  String _normalize(String input) {
+    const accents = 'áéíóúüàèìòùâêîôûäëïöüãõñ';
+    const normal = 'aeiouuaeioaeiouaeiouaoon';
+    var out = input.toLowerCase();
+    for (var i = 0; i < accents.length; i++) {
+      out = out.replaceAll(accents[i], normal[i]);
+    }
+    return out;
+  }
+
+  @override
+  void dispose() {
+    _speech.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: ColorApp.surface,
-      padding: const EdgeInsets.all(Dimens.paddingLg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            controller: supplierController,
-            decoration: moduleRoundedInputDecoration(
-              label: AppConstants.hintSupplierName,
-              focusColor: ColorApp.moduleCompras,
+      decoration: const BoxDecoration(
+        color: ColorApp.surface,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(Dimens.radiusNavTop),
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        Dimens.paddingXl,
+        Dimens.paddingMd,
+        Dimens.paddingXl,
+        Dimens.paddingXl + MediaQuery.of(context).padding.bottom,
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ModuleSheetHandle(),
+            const SizedBox(height: Dimens.paddingLg),
+            ModuleVoiceIndicator(
+              isListening: _isListening,
+              accentDark: ColorApp.moduleComprasDark,
+              accentShadow: ColorApp.moduleComprasShadow,
             ),
-          ),
-          const SizedBox(height: Dimens.paddingMd),
+            const SizedBox(height: Dimens.paddingMd),
+            Text(
+              _isListening
+                  ? AppConstants.labelListening
+                  : _voiceError.isNotEmpty
+                  ? _voiceError
+                  : _transcript.isEmpty
+                  ? AppConstants.labelVoiceHintProveedorLong
+                  : _transcript,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: Dimens.fontSizeSm,
+                color: _voiceError.isNotEmpty
+                    ? ColorApp.stockLowText
+                    : ColorApp.slate500,
+              ),
+            ),
+            if (_parsed != null) ...[
+              const SizedBox(height: Dimens.paddingLg),
+              _SupplierConfirmCard(parsed: _parsed!),
+              const SizedBox(height: Dimens.paddingLg),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _startListening,
+                      child: const Text(AppConstants.labelVoiceRetry),
+                    ),
+                  ),
+                  const SizedBox(width: Dimens.paddingMd),
+                  Expanded(
+                    child: ModulePrimaryButton(
+                      label: AppConstants.labelVoiceConfirm,
+                      onPressed: () => widget.onRegister(
+                        _parsed!.supplierName,
+                        _parsed!.amount,
+                        _parsed!.payment,
+                      ),
+                      color: ColorApp.moduleCompras,
+                      shadowColor: ColorApp.moduleComprasShadow,
+                    ),
+                  ),
+                ],
+              ),
+            ] else if (!_isListening) ...[
+              const SizedBox(height: Dimens.paddingLg),
+              ModulePrimaryButton(
+                label: AppConstants.labelVoiceRetry,
+                onPressed: _startListening,
+                color: ColorApp.moduleCompras,
+                shadowColor: ColorApp.moduleComprasShadow,
+              ),
+            ],
+            const SizedBox(height: Dimens.paddingMd),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SupplierConfirmCard extends StatelessWidget {
+  const _SupplierConfirmCard({required this.parsed});
+
+  final _ParsedSupplier parsed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(Dimens.paddingLg),
+      decoration: BoxDecoration(
+        color: ColorApp.moduleComprasBg,
+        borderRadius: BorderRadius.circular(Dimens.radiusXl),
+        border: Border.all(color: ColorApp.moduleCompras),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
           Row(
             children: [
-              Expanded(
-                child: TextField(
-                  controller: amountController,
-                  keyboardType: TextInputType.number,
-                  decoration: moduleRoundedInputDecoration(
-                    label: AppConstants.hintAmount,
-                    focusColor: ColorApp.moduleCompras,
-                  ),
+              const CircleAvatar(
+                radius: 16,
+                backgroundColor: ColorApp.moduleComprasBg,
+                child: Icon(
+                  Icons.store,
+                  color: ColorApp.moduleCompras,
+                  size: 18,
                 ),
               ),
-              const SizedBox(width: Dimens.paddingMd),
-              Expanded(
-                child: DropdownButtonFormField<PaymentMethod>(
-                  initialValue: selectedPayment,
-                  decoration: moduleRoundedInputDecoration(
-                    focusColor: ColorApp.moduleCompras,
-                  ),
-                  items: [
-                    for (final m in PaymentMethod.values)
-                      DropdownMenuItem<PaymentMethod>(
-                        value: m,
-                        child: Text(m.label),
-                      ),
-                  ],
-                  onChanged: onPaymentChanged,
+              const SizedBox(width: Dimens.paddingSm),
+              Text(
+                parsed.supplierName,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: ColorApp.slate900,
                 ),
               ),
             ],
           ),
-          if (error.isNotEmpty) ...[
-            const SizedBox(height: Dimens.paddingXs),
-            Text(error, style: const TextStyle(color: ColorApp.stockLowText)),
-          ],
-          const SizedBox(height: Dimens.paddingMd),
-          ModulePrimaryButton(
-            label: AppConstants.btnRegister,
-            onPressed: onSubmit,
-            color: ColorApp.moduleCompras,
-            shadowColor: ColorApp.moduleComprasShadow,
+          const SizedBox(height: Dimens.paddingXs),
+          Text(
+            parsed.payment.label,
+            style: const TextStyle(
+              fontSize: Dimens.fontSizeSm,
+              color: ColorApp.slate500,
+            ),
+          ),
+          const SizedBox(height: Dimens.paddingXs),
+          Text(
+            CurrencyFormatter.format(parsed.amount),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+              color: ColorApp.moduleCompras,
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Chip de proveedor conocido para el sheet de pago a proveedor.
+class _SupplierChip extends StatelessWidget {
+  const _SupplierChip({
+    required this.name,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String name;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(
+          horizontal: Dimens.paddingMd,
+          vertical: Dimens.paddingSm,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? ColorApp.moduleComprasBg : ColorApp.backgroundLight,
+          borderRadius: BorderRadius.circular(Dimens.radiusXl),
+          border: Border.all(
+            color: selected ? ColorApp.moduleCompras : ColorApp.borderLight,
+            width: selected ? Dimens.borderWidthFocus : Dimens.borderWidth,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.store,
+              size: 14,
+              color: selected ? ColorApp.moduleCompras : ColorApp.slate400,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              name,
+              style: TextStyle(
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                fontSize: Dimens.fontSizeSm,
+                color: selected ? ColorApp.moduleCompras : ColorApp.slate900,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -501,10 +1513,19 @@ class _SupplierList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (payments.isEmpty) return const ModuleEmptyList();
+    if (payments.isEmpty) {
+      return const ColoredBox(
+        color: ColorApp.listSectionBg,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: Dimens.bottomActionBarPad),
+          child: Center(child: Text(AppConstants.emptyList)),
+        ),
+      );
+    }
     return ColoredBox(
       color: ColorApp.listSectionBg,
       child: ListView.builder(
+        padding: const EdgeInsets.only(bottom: Dimens.bottomActionBarPad),
         itemCount: payments.length,
         itemBuilder: (context, index) {
           final p = payments[payments.length - 1 - index];
@@ -523,7 +1544,7 @@ class _SupplierList extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               subtitle: Text(
-                '${p.paymentMethod.label} · ${DateFilter.formatShort(p.date)}',
+                '${p.paymentMethod.label} \u00b7 ${DateFilter.formatShort(p.date)}',
                 style: const TextStyle(color: ColorApp.slate500),
               ),
               trailing: Text(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../res/data/colors.dart';
 import '../../res/data/constants.dart';
@@ -231,6 +232,113 @@ class StockBadge extends StatelessWidget {
   }
 }
 
+/// Campo de texto con botón de dictado por voz integrado.
+/// Al pulsar el micrófono (sufijo) inicia el reconocimiento en español;
+/// al finalizar coloca el texto en el [controller]. Mantiene el mismo
+/// estilo visual que [moduleRoundedInputDecoration].
+class VoiceTextField extends StatefulWidget {
+  const VoiceTextField({
+    super.key,
+    required this.controller,
+    required this.focusColor,
+    this.label,
+    this.keyboardType,
+  });
+
+  final TextEditingController controller;
+  final Color focusColor;
+  final String? label;
+  final TextInputType? keyboardType;
+
+  @override
+  State<VoiceTextField> createState() => _VoiceTextFieldState();
+}
+
+class _VoiceTextFieldState extends State<VoiceTextField> {
+  final SpeechToText _speech = SpeechToText();
+  bool _isListening = false;
+  bool _isAvailable = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _speech.initialize(onStatus: _onStatus).then((ok) {
+      if (mounted) setState(() => _isAvailable = ok);
+    });
+  }
+
+  void _onStatus(String status) {
+    if ((status == 'done' || status == 'notListening') && mounted) {
+      setState(() => _isListening = false);
+    }
+  }
+
+  Future<void> _toggle() async {
+    if (_isListening) {
+      await _speech.stop();
+      if (mounted) setState(() => _isListening = false);
+      return;
+    }
+    if (!_isAvailable) {
+      _isAvailable = await _speech.initialize(onStatus: _onStatus);
+    }
+    if (!_isAvailable || !mounted) return;
+    setState(() => _isListening = true);
+    await _speech.listen(
+      localeId: 'es_CO',
+      onResult: (result) {
+        widget.controller.text = result.recognizedWords;
+        widget.controller.selection = TextSelection.fromPosition(
+          TextPosition(offset: widget.controller.text.length),
+        );
+        if (result.finalResult && mounted) {
+          setState(() => _isListening = false);
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _speech.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const radius = BorderRadius.all(Radius.circular(Dimens.radiusXl));
+    return TextField(
+      controller: widget.controller,
+      keyboardType: widget.keyboardType,
+      decoration: InputDecoration(
+        labelText: widget.label,
+        border: const OutlineInputBorder(borderRadius: radius),
+        enabledBorder: const OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: BorderSide(color: ColorApp.borderLight),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: radius,
+          borderSide: BorderSide(
+            color: widget.focusColor,
+            width: Dimens.borderWidthFocus,
+          ),
+        ),
+        suffixIcon: _isAvailable
+            ? IconButton(
+                icon: Icon(
+                  _isListening ? Icons.mic : Icons.mic_none,
+                  color: _isListening ? widget.focusColor : ColorApp.slate400,
+                ),
+                tooltip: _isListening ? 'Detener' : 'Dictar',
+                onPressed: _toggle,
+              )
+            : null,
+      ),
+    );
+  }
+}
+
 /// Fondo gris para el estado vacío de listas, reutilizado en todos los
 /// módulos para evitar duplicar el mismo [ColoredBox] + [Center].
 class ModuleEmptyList extends StatelessWidget {
@@ -241,6 +349,258 @@ class ModuleEmptyList extends StatelessWidget {
     return const ColoredBox(
       color: ColorApp.listSectionBg,
       child: Center(child: Text(AppConstants.emptyList)),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Widgets de interfaz de voz compartidos (reutilizados en todos los módulos)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Barra de acción inferior con botón manual (+) y botón de voz (mic).
+/// Acepta colores del módulo para cumplir el principio DRY: todos los
+/// módulos de entrada reutilizan este widget.
+class ModuleActionBar extends StatelessWidget {
+  const ModuleActionBar({
+    super.key,
+    required this.onAdd,
+    required this.onVoice,
+    required this.accentColor,
+    required this.accentBg,
+    required this.accentDark,
+    required this.accentShadow,
+    this.hint = AppConstants.labelVoiceHint,
+  });
+
+  final VoidCallback onAdd;
+  final VoidCallback onVoice;
+  final Color accentColor;
+  final Color accentBg;
+  final Color accentDark;
+  final Color accentShadow;
+
+  /// Texto de ayuda entre los dos botones.
+  final String hint;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    return Container(
+      padding: EdgeInsets.fromLTRB(
+        Dimens.paddingXl,
+        Dimens.paddingMd,
+        Dimens.paddingXl,
+        Dimens.paddingMd + bottomPad,
+      ),
+      decoration: const BoxDecoration(
+        color: ColorApp.surface,
+        boxShadow: [
+          BoxShadow(
+            color: ColorApp.shadowOverlay,
+            blurRadius: 20,
+            offset: Offset(0, -4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          ModuleAddFab(
+            onTap: onAdd,
+            accentColor: accentColor,
+            accentBg: accentBg,
+          ),
+          Text(
+            hint,
+            style: const TextStyle(
+              fontSize: Dimens.fontSizeXs,
+              color: ColorApp.slate400,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          ModuleVoiceFab(
+            onTap: onVoice,
+            accentDark: accentDark,
+            accentShadow: accentShadow,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Botón circular para abrir el formulario manual de un módulo.
+class ModuleAddFab extends StatelessWidget {
+  const ModuleAddFab({
+    super.key,
+    required this.onTap,
+    required this.accentColor,
+    required this.accentBg,
+  });
+
+  final VoidCallback onTap;
+  final Color accentColor;
+  final Color accentBg;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: Dimens.addFabSize,
+        height: Dimens.addFabSize,
+        decoration: BoxDecoration(
+          color: accentBg,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: accentColor,
+            width: Dimens.borderWidthFocus,
+          ),
+        ),
+        child: Icon(Icons.add, color: accentColor, size: 22),
+      ),
+    );
+  }
+}
+
+/// Botón circular de micrófono con gradiente para dictado por voz.
+class ModuleVoiceFab extends StatelessWidget {
+  const ModuleVoiceFab({
+    super.key,
+    required this.onTap,
+    required this.accentDark,
+    required this.accentShadow,
+  });
+
+  final VoidCallback onTap;
+  final Color accentDark;
+  final Color accentShadow;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: Dimens.voiceFabSize,
+        height: Dimens.voiceFabSize,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: LinearGradient(
+            colors: [accentDark, ColorApp.emeraldCustom],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: accentShadow,
+              blurRadius: 14,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: const Icon(Icons.mic, color: ColorApp.surface, size: 30),
+      ),
+    );
+  }
+}
+
+/// Indicador animado de escucha activa de voz.
+/// Se expande cuando [isListening] es true.
+class ModuleVoiceIndicator extends StatelessWidget {
+  const ModuleVoiceIndicator({
+    super.key,
+    required this.isListening,
+    required this.accentDark,
+    required this.accentShadow,
+  });
+
+  final bool isListening;
+  final Color accentDark;
+  final Color accentShadow;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      width: isListening ? Dimens.voiceFabSize + 16 : Dimens.voiceFabSize,
+      height: isListening ? Dimens.voiceFabSize + 16 : Dimens.voiceFabSize,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          colors: [accentDark, ColorApp.emeraldCustom],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: isListening
+            ? [BoxShadow(color: accentShadow, blurRadius: 24, spreadRadius: 6)]
+            : null,
+      ),
+      child: Icon(
+        isListening ? Icons.mic : Icons.mic_off,
+        color: ColorApp.surface,
+        size: 30,
+      ),
+    );
+  }
+}
+
+/// Botón circular para incrementar/decrementar cantidad en un stepper.
+/// Acepta [accentColor] y [accentBg] para adaptar el estilo a cada módulo.
+class ModuleStepperButton extends StatelessWidget {
+  const ModuleStepperButton({
+    super.key,
+    required this.icon,
+    required this.onTap,
+    required this.accentColor,
+    required this.accentBg,
+    this.enabled = true,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool enabled;
+  final Color accentColor;
+  final Color accentBg;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: Dimens.qtyButtonSize,
+        height: Dimens.qtyButtonSize,
+        decoration: BoxDecoration(
+          color: enabled ? accentBg : ColorApp.backgroundLight,
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: enabled ? accentColor : ColorApp.borderLight,
+          ),
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: enabled ? accentColor : ColorApp.slate400,
+        ),
+      ),
+    );
+  }
+}
+
+/// Handle de arrastre para bottom sheets — pill centrado.
+class ModuleSheetHandle extends StatelessWidget {
+  const ModuleSheetHandle({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Container(
+        width: Dimens.navPillWidth * 2,
+        height: Dimens.navPillHeight + 1,
+        decoration: BoxDecoration(
+          color: ColorApp.borderLight,
+          borderRadius: BorderRadius.circular(Dimens.radiusFull),
+        ),
+      ),
     );
   }
 }

@@ -32,8 +32,6 @@ build/app/outputs/flutter-apk/app-release.apk
 flutter install
 ```
 
-> Asegúrate de tener **Depuración USB** activada en el teléfono.
-
 ```bash
 flutter build apk --release --no-tree-shake-icons
 ```

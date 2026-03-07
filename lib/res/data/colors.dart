@@ -54,6 +54,7 @@ abstract final class ColorApp {
   static const Color moduleIngresosBg = Color(0xFFEFF6FF);
   static const Color moduleComprasBg = Color(0xFFFFF7ED);
   static const Color moduleGastosBg = Color(0xFFFAF5FF);
+  static const Color moduleInventarioBg = Color(0xFFF0FDF4); // green-50
 
   // Gradiente del módulo Ingresos (azul oscuro → esmeralda)
   static const Color moduleIngresosDark = Color(0xFF1E3A8A); // blue-900
@@ -90,4 +91,7 @@ abstract final class ColorApp {
 
   // Fondo de tarjetas de formulario
   static const Color cardBg = Color(0xFFF8FAFC);
+
+  // Sombra suave para barras flotantes (negro al 9%)
+  static const Color shadowOverlay = Color(0x18000000);
 }

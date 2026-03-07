@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 
 import '../models/product.dart';
 import '../res/data/colors.dart';
@@ -57,19 +58,16 @@ class _InventoryScreenState extends State<InventoryScreen>
             ),
           ),
         ),
-        title: const Text(
-          AppConstants.inventoryTitle,
-          style: TextStyle(
-            fontSize: Dimens.fontSizeTitle,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
         bottom: TabBar(
           controller: _tabController,
           labelColor: ColorApp.surface,
           unselectedLabelColor: ColorApp.slate100,
           indicatorColor: ColorApp.surface,
           indicatorWeight: Dimens.tabIndicatorWidth,
+          labelStyle: const TextStyle(
+            fontSize: Dimens.fontSizeTab,
+            fontWeight: FontWeight.w600,
+          ),
           tabs: const [
             Tab(text: AppConstants.tabManualEntry),
             Tab(text: AppConstants.tabStock),
@@ -97,150 +95,551 @@ class _ManualEntryTab extends StatefulWidget {
 }
 
 class _ManualEntryTabState extends State<_ManualEntryTab> {
-  final _nameController = TextEditingController();
-  final _stockController = TextEditingController();
-  final _unitController = TextEditingController();
-  final _costController = TextEditingController();
-  String _error = '';
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _stockController.dispose();
-    _unitController.dispose();
-    _costController.dispose();
-    super.dispose();
-  }
-
-  void _submit(BuildContext context) {
-    final name = _nameController.text.trim();
-    final stock = int.tryParse(_stockController.text.trim());
-    final unit = _unitController.text.trim();
-    final cost = double.tryParse(_costController.text.trim());
-
-    if (name.isEmpty || unit.isEmpty) {
-      setState(() => _error = AppConstants.validationFillAllFields);
-      return;
-    }
-    if (stock == null || stock < 0 || cost == null || cost <= 0) {
-      setState(() => _error = AppConstants.validationPositiveNumber);
-      return;
-    }
-
+  void _registerProduct({
+    required BuildContext context,
+    required String name,
+    required int qty,
+    required String unit,
+    required double cost,
+  }) {
     StoreProvider.of(context).addInventoryProduct(
       InventoryProduct(
         id: 'ip${DateTime.now().millisecondsSinceEpoch}',
         name: name,
-        stock: stock,
+        stock: qty,
         unit: unit,
         icon: Icons.inventory_2,
         unitCost: cost,
       ),
     );
-    _nameController.clear();
-    _stockController.clear();
-    _unitController.clear();
-    _costController.clear();
-    setState(() => _error = '');
+  }
+
+  void _openAddSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _AddProductSheet(
+        onRegister: (name, qty, unit, cost) {
+          Navigator.pop(sheetCtx);
+          if (!mounted) return;
+          _registerProduct(
+            context: context,
+            name: name,
+            qty: qty,
+            unit: unit,
+            cost: cost,
+          );
+        },
+      ),
+    );
+  }
+
+  void _openVoiceSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => _VoiceProductSheet(
+        onRegister: (name, qty, unit, cost) {
+          Navigator.pop(sheetCtx);
+          if (!mounted) return;
+          _registerProduct(
+            context: context,
+            name: name,
+            qty: qty,
+            unit: unit,
+            cost: cost,
+          );
+        },
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final store = StoreProvider.of(context);
-    return Column(
+    return Stack(
       children: [
-        _ProductForm(
-          nameController: _nameController,
-          stockController: _stockController,
-          unitController: _unitController,
-          costController: _costController,
-          error: _error,
-          onSubmit: () => _submit(context),
+        Column(
+          children: [
+            const _InfoBanner(),
+            Expanded(
+              child: _ProductList(
+                products: store.products,
+                showCost: true,
+                bottomPadding: Dimens.bottomActionBarPad,
+              ),
+            ),
+          ],
         ),
-        const _InfoBanner(),
-        Expanded(child: _ProductList(products: store.products, showCost: true)),
+        Positioned(
+          bottom: 0,
+          left: 0,
+          right: 0,
+          child: ModuleActionBar(
+            onAdd: () => _openAddSheet(context),
+            onVoice: () => _openVoiceSheet(context),
+            accentColor: ColorApp.moduleInventario,
+            accentBg: ColorApp.moduleInventarioBg,
+            accentDark: ColorApp.moduleInventarioDark,
+            accentShadow: ColorApp.moduleInventarioShadow,
+          ),
+        ),
       ],
     );
   }
 }
 
-class _ProductForm extends StatelessWidget {
-  const _ProductForm({
-    required this.nameController,
-    required this.stockController,
-    required this.unitController,
-    required this.costController,
-    required this.error,
-    required this.onSubmit,
-  });
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom sheet: registro manual de producto
+// ─────────────────────────────────────────────────────────────────────────────
 
-  final TextEditingController nameController;
-  final TextEditingController stockController;
-  final TextEditingController unitController;
-  final TextEditingController costController;
-  final String error;
-  final VoidCallback onSubmit;
+class _AddProductSheet extends StatefulWidget {
+  const _AddProductSheet({required this.onRegister});
+
+  final void Function(String name, int qty, String unit, double cost)
+  onRegister;
+
+  @override
+  State<_AddProductSheet> createState() => _AddProductSheetState();
+}
+
+class _AddProductSheetState extends State<_AddProductSheet> {
+  final _nameController = TextEditingController();
+  final _unitController = TextEditingController();
+  final _costController = TextEditingController();
+  int _qty = 1;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _unitController.dispose();
+    _costController.dispose();
+    super.dispose();
+  }
+
+  bool get _canSubmit {
+    final cost = double.tryParse(_costController.text.trim());
+    return _nameController.text.trim().isNotEmpty &&
+        _unitController.text.trim().isNotEmpty &&
+        (cost ?? 0) > 0 &&
+        _qty > 0;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: ColorApp.surface,
-      padding: const EdgeInsets.all(Dimens.paddingLg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            controller: nameController,
-            decoration: moduleRoundedInputDecoration(
-              label: AppConstants.hintProductName,
-              focusColor: ColorApp.moduleInventario,
-            ),
-          ),
-          const SizedBox(height: Dimens.paddingSm),
-          Row(
+      decoration: const BoxDecoration(
+        color: ColorApp.surface,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(Dimens.radiusNavTop),
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        Dimens.paddingXl,
+        Dimens.paddingMd,
+        Dimens.paddingXl,
+        Dimens.paddingXl + MediaQuery.of(context).padding.bottom,
+      ),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: stockController,
-                  keyboardType: TextInputType.number,
-                  decoration: moduleRoundedInputDecoration(
-                    label: AppConstants.hintQuantity,
-                    focusColor: ColorApp.moduleInventario,
-                  ),
+              const ModuleSheetHandle(),
+              const SizedBox(height: Dimens.paddingMd),
+              const Text(
+                AppConstants.labelNewProducto,
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: Dimens.paddingLg),
+              // ── Nombre ────────────────────────────────────────────────────
+              TextField(
+                controller: _nameController,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (_) => setState(() {}),
+                decoration: moduleRoundedInputDecoration(
+                  label: AppConstants.hintProductName,
+                  focusColor: ColorApp.moduleInventario,
                 ),
               ),
-              const SizedBox(width: Dimens.paddingSm),
-              Expanded(
-                child: TextField(
-                  controller: unitController,
-                  decoration: moduleRoundedInputDecoration(
-                    label: AppConstants.hintUnit,
-                    focusColor: ColorApp.moduleInventario,
+              const SizedBox(height: Dimens.paddingMd),
+              // ── Cantidad ──────────────────────────────────────────────────
+              Row(
+                children: [
+                  const Text(
+                    AppConstants.hintQuantity,
+                    style: TextStyle(color: ColorApp.slate500),
                   ),
+                  const Spacer(),
+                  ModuleStepperButton(
+                    icon: Icons.remove,
+                    onTap: _qty > 1 ? () => setState(() => _qty--) : () {},
+                    accentColor: ColorApp.moduleInventario,
+                    accentBg: ColorApp.moduleInventarioBg,
+                    enabled: _qty > 1,
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: Dimens.paddingMd,
+                    ),
+                    child: Text(
+                      '$_qty',
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  ModuleStepperButton(
+                    icon: Icons.add,
+                    onTap: () => setState(() => _qty++),
+                    accentColor: ColorApp.moduleInventario,
+                    accentBg: ColorApp.moduleInventarioBg,
+                    enabled: true,
+                  ),
+                ],
+              ),
+              const SizedBox(height: Dimens.paddingMd),
+              // ── Unidad ────────────────────────────────────────────────────
+              TextField(
+                controller: _unitController,
+                onChanged: (_) => setState(() {}),
+                decoration: moduleRoundedInputDecoration(
+                  label: AppConstants.hintUnit,
+                  focusColor: ColorApp.moduleInventario,
                 ),
+              ),
+              const SizedBox(height: Dimens.paddingMd),
+              // ── Costo unitario ────────────────────────────────────────────
+              TextField(
+                controller: _costController,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
+                decoration: moduleRoundedInputDecoration(
+                  label: AppConstants.hintUnitCost,
+                  focusColor: ColorApp.moduleInventario,
+                ),
+              ),
+              const SizedBox(height: Dimens.paddingLg),
+              ModulePrimaryButton(
+                label: AppConstants.btnRegister,
+                onPressed: _canSubmit
+                    ? () => widget.onRegister(
+                        _nameController.text.trim(),
+                        _qty,
+                        _unitController.text.trim(),
+                        double.parse(_costController.text.trim()),
+                      )
+                    : () {},
+                color: ColorApp.moduleInventario,
+                shadowColor: ColorApp.moduleInventarioShadow,
+                foreground: ColorApp.slate900,
               ),
             ],
           ),
-          const SizedBox(height: Dimens.paddingSm),
-          TextField(
-            controller: costController,
-            keyboardType: TextInputType.number,
-            decoration: moduleRoundedInputDecoration(
-              label: AppConstants.hintUnitCost,
-              focusColor: ColorApp.moduleInventario,
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom sheet: dictado por voz — Producto
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Resultado del parseo de voz para un producto.
+class _ParsedProduct {
+  const _ParsedProduct({
+    required this.name,
+    required this.qty,
+    required this.unit,
+    required this.cost,
+  });
+
+  final String name;
+  final int qty;
+  final String unit;
+  final double cost;
+}
+
+class _VoiceProductSheet extends StatefulWidget {
+  const _VoiceProductSheet({required this.onRegister});
+
+  final void Function(String name, int qty, String unit, double cost)
+  onRegister;
+
+  @override
+  State<_VoiceProductSheet> createState() => _VoiceProductSheetState();
+}
+
+class _VoiceProductSheetState extends State<_VoiceProductSheet> {
+  final SpeechToText _speech = SpeechToText();
+  bool _isListening = false;
+  bool _isAvailable = false;
+  String _transcript = '';
+  _ParsedProduct? _parsed;
+  String _voiceError = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _initAndListen();
+  }
+
+  Future<void> _initAndListen() async {
+    _isAvailable = await _speech.initialize(onStatus: _onStatus);
+    if (_isAvailable && mounted) _startListening();
+  }
+
+  void _onStatus(String status) {
+    if ((status == 'done' || status == 'notListening') && mounted) {
+      setState(() => _isListening = false);
+    }
+  }
+
+  void _startListening() {
+    if (!_isAvailable) return;
+    setState(() {
+      _isListening = true;
+      _transcript = '';
+      _parsed = null;
+      _voiceError = '';
+    });
+    _speech.listen(
+      localeId: 'es_CO',
+      onResult: (result) {
+        if (!mounted) return;
+        setState(() => _transcript = result.recognizedWords);
+        if (result.finalResult) {
+          final parsed = _parseSpeech(result.recognizedWords);
+          setState(() {
+            _isListening = false;
+            _parsed = parsed;
+            _voiceError = parsed == null
+                ? AppConstants.labelVoiceNoMatchProducto
+                : '';
+          });
+        }
+      },
+    );
+  }
+
+  /// Interpreta: "arroz 100 kilos 5000"
+  /// → name="Arroz", qty=100, unit="kilos", cost=5000
+  _ParsedProduct? _parseSpeech(String rawText) {
+    final text = _normalize(rawText);
+    final words = text.split(' ').where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty) return null;
+
+    const unitWords = [
+      'kg',
+      'und',
+      'paq',
+      'kilo',
+      'kilos',
+      'unidad',
+      'unidades',
+      'paquete',
+      'paquetes',
+      'litro',
+      'litros',
+      'caja',
+      'cajas',
+    ];
+
+    final numRegex = RegExp(r'^\d+([.,]\d+)?$');
+    final numbers = <double>[];
+    for (final w in words) {
+      final normalized = w.replaceAll(',', '.');
+      if (numRegex.hasMatch(normalized)) {
+        final v = double.tryParse(normalized);
+        if (v != null) numbers.add(v);
+      }
+    }
+
+    if (numbers.length < 2) return null;
+    final qty = numbers.first.toInt();
+    final cost = numbers.last;
+    if (qty <= 0 || cost <= 0) return null;
+
+    String unit = 'und';
+    for (final w in words) {
+      if (unitWords.contains(w)) {
+        unit = w;
+        break;
+      }
+    }
+
+    final nameWords = words
+        .where(
+          (w) =>
+              !numRegex.hasMatch(w.replaceAll(',', '.')) &&
+              !unitWords.contains(w),
+        )
+        .toList(growable: false);
+
+    if (nameWords.isEmpty) return null;
+    final name = nameWords
+        .map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : w)
+        .join(' ')
+        .trim();
+    if (name.isEmpty) return null;
+
+    return _ParsedProduct(name: name, qty: qty, unit: unit, cost: cost);
+  }
+
+  String _normalize(String input) {
+    const accents = 'áéíóúüàèìòùâêîôûäëïöüãõñ';
+    const normal = 'aeiouuaeioaeiouaeiouaoon';
+    var out = input.toLowerCase();
+    for (var i = 0; i < accents.length; i++) {
+      out = out.replaceAll(accents[i], normal[i]);
+    }
+    return out;
+  }
+
+  @override
+  void dispose() {
+    _speech.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: ColorApp.surface,
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(Dimens.radiusNavTop),
+        ),
+      ),
+      padding: EdgeInsets.fromLTRB(
+        Dimens.paddingXl,
+        Dimens.paddingMd,
+        Dimens.paddingXl,
+        Dimens.paddingXl + MediaQuery.of(context).padding.bottom,
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ModuleSheetHandle(),
+            const SizedBox(height: Dimens.paddingLg),
+            ModuleVoiceIndicator(
+              isListening: _isListening,
+              accentDark: ColorApp.moduleInventarioDark,
+              accentShadow: ColorApp.moduleInventarioShadow,
+            ),
+            const SizedBox(height: Dimens.paddingMd),
+            Text(
+              _isListening
+                  ? AppConstants.labelListening
+                  : _voiceError.isNotEmpty
+                  ? _voiceError
+                  : _transcript.isEmpty
+                  ? AppConstants.labelVoiceHintProductoLong
+                  : _transcript,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: Dimens.fontSizeSm,
+                color: _voiceError.isNotEmpty
+                    ? ColorApp.stockLowText
+                    : ColorApp.slate500,
+              ),
+            ),
+            if (_parsed != null) ...[
+              const SizedBox(height: Dimens.paddingLg),
+              _ProductConfirmCard(parsed: _parsed!),
+              const SizedBox(height: Dimens.paddingLg),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _startListening,
+                      child: const Text(AppConstants.labelVoiceRetry),
+                    ),
+                  ),
+                  const SizedBox(width: Dimens.paddingMd),
+                  Expanded(
+                    child: ModulePrimaryButton(
+                      label: AppConstants.labelVoiceConfirm,
+                      onPressed: () => widget.onRegister(
+                        _parsed!.name,
+                        _parsed!.qty,
+                        _parsed!.unit,
+                        _parsed!.cost,
+                      ),
+                      color: ColorApp.moduleInventario,
+                      shadowColor: ColorApp.moduleInventarioShadow,
+                      foreground: ColorApp.slate900,
+                    ),
+                  ),
+                ],
+              ),
+            ] else if (!_isListening) ...[
+              const SizedBox(height: Dimens.paddingLg),
+              ModulePrimaryButton(
+                label: AppConstants.labelVoiceRetry,
+                onPressed: _startListening,
+                color: ColorApp.moduleInventario,
+                shadowColor: ColorApp.moduleInventarioShadow,
+                foreground: ColorApp.slate900,
+              ),
+            ],
+            const SizedBox(height: Dimens.paddingMd),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ProductConfirmCard extends StatelessWidget {
+  const _ProductConfirmCard({required this.parsed});
+
+  final _ParsedProduct parsed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(Dimens.paddingLg),
+      decoration: BoxDecoration(
+        color: ColorApp.moduleInventarioBg,
+        borderRadius: BorderRadius.circular(Dimens.radiusXl),
+        border: Border.all(color: ColorApp.moduleInventario),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            parsed.name,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: ColorApp.slate900,
             ),
           ),
-          if (error.isNotEmpty) ...[
-            const SizedBox(height: Dimens.paddingXs),
-            Text(error, style: const TextStyle(color: ColorApp.stockLowText)),
-          ],
-          const SizedBox(height: Dimens.paddingSm),
-          ModulePrimaryButton(
-            label: AppConstants.btnRegister,
-            onPressed: onSubmit,
-            color: ColorApp.moduleInventario,
-            shadowColor: ColorApp.moduleInventarioShadow,
-            foreground: ColorApp.slate900,
+          const SizedBox(height: Dimens.paddingXs),
+          Text(
+            '${parsed.qty} ${parsed.unit}',
+            style: const TextStyle(
+              fontSize: Dimens.fontSizeSm,
+              color: ColorApp.slate500,
+            ),
+          ),
+          const SizedBox(height: Dimens.paddingXs),
+          Text(
+            CurrencyFormatter.format(parsed.cost),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+              color: ColorApp.moduleInventario,
+            ),
           ),
         ],
       ),
@@ -281,18 +680,30 @@ class _InfoBanner extends StatelessWidget {
 }
 
 class _ProductList extends StatelessWidget {
-  const _ProductList({required this.products, this.showCost = false});
+  const _ProductList({
+    required this.products,
+    this.showCost = false,
+    this.bottomPadding = 0,
+  });
   final List<InventoryProduct> products;
   final bool showCost;
+  final double bottomPadding;
 
   @override
   Widget build(BuildContext context) {
     if (products.isEmpty) {
-      return const ModuleEmptyList();
+      return ColoredBox(
+        color: ColorApp.listSectionBg,
+        child: Padding(
+          padding: EdgeInsets.only(bottom: bottomPadding),
+          child: const Center(child: Text(AppConstants.emptyList)),
+        ),
+      );
     }
     return ColoredBox(
       color: ColorApp.listSectionBg,
       child: ListView.builder(
+        padding: EdgeInsets.only(bottom: bottomPadding),
         itemCount: products.length,
         itemBuilder: (context, index) =>
             _ProductItem(product: products[index], showCost: showCost),

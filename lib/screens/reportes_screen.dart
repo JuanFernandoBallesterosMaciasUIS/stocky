@@ -56,24 +56,46 @@ class _ReportesScreenState extends State<ReportesScreen>
             ),
           ),
         ),
-        title: const Text(
-          AppConstants.navReportes,
-          style: TextStyle(
-            fontSize: Dimens.fontSizeTitle,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+
         bottom: TabBar(
           controller: _tabController,
           labelColor: ColorApp.surface,
           unselectedLabelColor: ColorApp.slate100,
           indicatorColor: ColorApp.surface,
           indicatorWeight: Dimens.tabIndicatorWidth,
+          labelStyle: const TextStyle(
+            fontSize: Dimens.fontSizeTab,
+            fontWeight: FontWeight.w600,
+          ),
           tabs: const [
-            Tab(text: AppConstants.tabFlujoCaja),
-            Tab(text: AppConstants.tabCuentasCobrar),
-            Tab(text: AppConstants.tabCuentasPagar),
-            Tab(text: AppConstants.tabEstadoResultado),
+            Tab(
+              height: Dimens.tabHeightTall,
+              child: Text(
+                AppConstants.tabFlujoCaja,
+                textAlign: TextAlign.center,
+              ),
+            ),
+            Tab(
+              height: Dimens.tabHeightTall,
+              child: Text(
+                AppConstants.tabCuentasCobrar,
+                textAlign: TextAlign.center,
+              ),
+            ),
+            Tab(
+              height: Dimens.tabHeightTall,
+              child: Text(
+                AppConstants.tabCuentasPagar,
+                textAlign: TextAlign.center,
+              ),
+            ),
+            Tab(
+              height: Dimens.tabHeightTall,
+              child: Text(
+                AppConstants.tabEstadoResultado,
+                textAlign: TextAlign.center,
+              ),
+            ),
           ],
         ),
       ),
