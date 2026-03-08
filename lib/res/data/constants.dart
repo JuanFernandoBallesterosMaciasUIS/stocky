@@ -40,8 +40,12 @@ enum PaymentMethod {
   /// Devuelve true si este método genera una cuenta por cobrar/pagar.
   bool get isCredit => this == PaymentMethod.credito;
 
-  /// Devuelve true si el pago fue en efectivo.
+  /// Devuelve true si el pago fue en efectivo (solo billete/moneda).
   bool get isCash => this == PaymentMethod.efectivo;
+
+  /// Devuelve true si el pago se hizo al contado (no genera deuda pendiente).
+  /// Incluye efectivo, Nequi, transferencia y tarjeta.
+  bool get isNonCredit => !isCredit;
 }
 
 // ─────────────────────────────────────────────
@@ -217,11 +221,13 @@ abstract final class AppConstants {
   static const String tabCuentasCobrar = 'Por Cobrar';
   static const String tabCuentasPagar = 'Por Pagar';
   static const String tabEstadoResultado = 'Resultado';
+  static const String tabKardex = 'Kardex';
 
   // Métricas de Flujo de Caja
-  static const String labelIngresosCash = 'Ingresos Efectivo';
-  static const String labelComprasCash = 'Compras Efectivo';
-  static const String labelGastosCash = 'Gastos Efectivo';
+  /// "Al contado" = efectivo + nequi + transferencia + tarjeta (sin crédito)
+  static const String labelIngresosCash = 'Ingresos al Contado';
+  static const String labelComprasCash = 'Compras al Contado';
+  static const String labelGastosCash = 'Gastos al Contado';
   static const String labelTotalCaja = 'Total en Caja';
 
   // Métricas de Estado de Resultado
@@ -250,4 +256,13 @@ abstract final class AppConstants {
   // Estado vacío
   static const String emptyReportePeriod = 'Sin movimientos en este período.';
   static const String emptyReporteGlobal = 'Sin registros a la fecha.';
+
+  // ─── Kardex ──────────────────────────────────────
+  static const String labelKardexProducto = 'PRODUCTO';
+  static const String labelKardexEntrada = 'Entrada';
+  static const String labelKardexSalida = 'Salida';
+  static const String labelKardexExistencia = 'Existencia';
+  static const String labelKardexValor = 'Valor';
+  static const String labelKardexTotal = 'TOTAL';
+  static const String emptyKardex = 'Sin productos en inventario.';
 }

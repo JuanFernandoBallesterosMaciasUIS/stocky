@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/client_payment.dart';
 import '../models/expense.dart';
 import '../models/expense_payment.dart';
+import '../models/kardex_entry.dart';
 import '../models/product.dart';
 import '../models/purchase.dart';
 import '../models/sale.dart';
@@ -133,6 +134,35 @@ class AppStore extends ChangeNotifier {
 
   List<InventoryProduct> get expiredProducts =>
       _products.where((p) => p.isExpired).toList(growable: false);
+
+  /// Kardex: una entrada por cada producto del inventario con sus totales
+  /// de entradas (compras) y salidas (ventas) acumuladas.
+  ///
+  /// Complejidad O(compras + ventas + productos): se pre-agregan en mapas
+  /// antes de iterar los productos, sin bucles anidados.
+  List<KardexEntry> get kardexEntries {
+    // Pre-agregar entradas por producto id en O(compras)
+    final entradasMap = <String, int>{};
+    for (final p in _purchases) {
+      entradasMap[p.productId] = (entradasMap[p.productId] ?? 0) + p.quantity;
+    }
+    // Pre-agregar salidas por producto id en O(ventas)
+    final salidasMap = <String, int>{};
+    for (final s in _sales) {
+      salidasMap[s.productId] = (salidasMap[s.productId] ?? 0) + s.quantity;
+    }
+    return [
+      for (final product in _products)
+        KardexEntry(
+          productId: product.id,
+          productName: product.name,
+          entradas: entradasMap[product.id] ?? 0,
+          salidas: salidasMap[product.id] ?? 0,
+          existencia: product.stock,
+          unitCost: product.unitCost,
+        ),
+    ];
+  }
 
   List<Sale> salesForPeriod(ReportPeriod period, DateTime reference) => _sales
       .where((s) => _isInPeriod(s.date, reference, period))

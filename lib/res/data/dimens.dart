@@ -57,6 +57,16 @@ abstract final class Dimens {
   // Toolbar con gradiente (0 = solo muestra el TabBar, sin espacio de título)
   static const double appBarHeightGradient = 0.0;
 
+  // TabBar de dos filas (5 pestañas sin scroll)
+  static const double twoRowTabRowHeight = 44.0;
+  static const double twoRowTabBarHeight = 88.0;
+
+  // Kardex – proporciones de columnas (flex units)
+  // Nombre: 2 partes — columnas numéricas: 2 partes — valor monetario: 3 partes
+  static const int kardexFlexNombre = 2;
+  static const int kardexFlexColumna = 2;
+  static const int kardexFlexValor = 3;
+
   // Barra de navegación inferior moderna
   static const double radiusNavTop = 20.0;
   static const double navPillHeight = 3.0;

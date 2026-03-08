@@ -5,9 +5,11 @@ import '../res/data/constants.dart';
 import '../res/data/dimens.dart';
 import '../store/store_provider.dart';
 import '../utils/currency_formatter.dart';
+import 'widgets/kardex_tab.dart';
 import 'widgets/module_widgets.dart';
+import 'widgets/two_row_tab_bar.dart';
 
-/// Pantalla de Reportes con cuatro pestañas:
+/// Pantalla de Reportes con cinco pestañas:
 /// - Flujo de Caja: movimientos de efectivo del período.
 /// - Por Cobrar: ventas a crédito pendientes de cobro.
 /// - Por Pagar: compras y gastos a crédito pendientes de pago.
@@ -26,7 +28,7 @@ class _ReportesScreenState extends State<ReportesScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -57,47 +59,7 @@ class _ReportesScreenState extends State<ReportesScreen>
           ),
         ),
 
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: ColorApp.surface,
-          unselectedLabelColor: ColorApp.slate100,
-          indicatorColor: ColorApp.surface,
-          indicatorWeight: Dimens.tabIndicatorWidth,
-          labelStyle: const TextStyle(
-            fontSize: Dimens.fontSizeTab,
-            fontWeight: FontWeight.w600,
-          ),
-          tabs: const [
-            Tab(
-              height: Dimens.tabHeightTall,
-              child: Text(
-                AppConstants.tabFlujoCaja,
-                textAlign: TextAlign.center,
-              ),
-            ),
-            Tab(
-              height: Dimens.tabHeightTall,
-              child: Text(
-                AppConstants.tabCuentasCobrar,
-                textAlign: TextAlign.center,
-              ),
-            ),
-            Tab(
-              height: Dimens.tabHeightTall,
-              child: Text(
-                AppConstants.tabCuentasPagar,
-                textAlign: TextAlign.center,
-              ),
-            ),
-            Tab(
-              height: Dimens.tabHeightTall,
-              child: Text(
-                AppConstants.tabEstadoResultado,
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ],
-        ),
+        bottom: TwoRowTabBar(controller: _tabController),
       ),
       body: TabBarView(
         controller: _tabController,
@@ -106,6 +68,7 @@ class _ReportesScreenState extends State<ReportesScreen>
           _CuentasCobrarTab(),
           _CuentasPagarTab(),
           _EstadoResultadoTab(),
+          KardexTab(),
         ],
       ),
     );
@@ -133,17 +96,17 @@ class _FlujoCajaTabState extends State<_FlujoCajaTab> {
 
     final ingresosCash = store
         .salesForPeriod(_period, now)
-        .where((s) => s.paymentMethod.isCash)
+        .where((s) => s.paymentMethod.isNonCredit)
         .fold(0.0, (acc, s) => acc + s.total);
 
     final comprasCash = store
         .purchasesForPeriod(_period, now)
-        .where((p) => p.paymentMethod.isCash)
+        .where((p) => p.paymentMethod.isNonCredit)
         .fold(0.0, (acc, p) => acc + p.total);
 
     final gastosCash = store
         .expensesForPeriod(_period, now)
-        .where((e) => e.paymentMethod.isCash)
+        .where((e) => e.paymentMethod.isNonCredit)
         .fold(0.0, (acc, e) => acc + e.amount);
 
     final totalCaja = ingresosCash - comprasCash - gastosCash;
